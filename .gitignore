@@ -23,15 +23,12 @@ __pycache__/
 *.pyo
 *.pyd
 *.egg-info/
-dist/
-build/
-*.spec
 .venv/
 venv/
 env/
 
 # ============================================================
-# PyInstaller output
+# PyInstaller output (keep musicdl.spec in git)
 # ============================================================
 dist/
 build/
