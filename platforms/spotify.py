@@ -81,7 +81,7 @@ def _get_spotify_cache_path() -> str:
         base = os.path.expanduser("~/Library/Application Support")
     else:
         base = os.path.expanduser("~/.config")
-    d = os.path.join(base, "MUSIC DL")
+    d = os.path.join(base, "MusicDL")
     os.makedirs(d, exist_ok=True)
     return os.path.join(d, ".spotify-cache")
 

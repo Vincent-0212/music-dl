@@ -81,7 +81,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='MUSIC DL',
+    name='MusicDL',
     debug=False,
     strip=False,
     upx=False,
@@ -91,7 +91,7 @@ exe = EXE(
 
 app = BUNDLE(
     exe,
-    name='MUSIC DL.app',
+    name='MusicDL.app',
     icon=None,
     bundle_identifier='com.vincentd.musicdl',
     info_plist={

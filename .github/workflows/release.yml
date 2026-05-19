@@ -46,8 +46,8 @@ jobs:
       - name: Smoke test exe
         shell: pwsh
         run: |
-          $proc = Start-Process -FilePath "dist/MUSIC DL.exe" -ArgumentList "--selftest" -Wait -PassThru -NoNewWindow
-          $logDir = "$env:APPDATA\MUSIC DL"
+          $proc = Start-Process -FilePath "dist/MusicDL.exe" -ArgumentList "--selftest" -Wait -PassThru -NoNewWindow
+          $logDir = "$env:APPDATA\MusicDL"
           $logFile = "$logDir\music-dl.log"
           if (Test-Path $logFile) {
             Write-Host "=== Last 40 lines of log ==="
@@ -62,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: "dist/MUSIC DL.exe"
+          path: "dist/MusicDL.exe"
 
   # ─── macOS build ──────────────────────────────────────────────────────────
   build-macos:
@@ -92,13 +92,13 @@ jobs:
         run: pyinstaller musicdl-mac.spec --clean
 
       - name: Zip .app bundle
-        run: cd dist && zip -r "MUSIC DL macOS.zip" "MUSIC DL.app"
+        run: cd dist && zip -r "MusicDL macOS.zip" "MusicDL.app"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos
-          path: "dist/MUSIC DL macOS.zip"
+          path: "dist/MusicDL macOS.zip"
 
   # ─── Create GitHub Release ────────────────────────────────────────────────
   release:
@@ -113,7 +113,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "MUSIC DL ${{ github.ref_name }}"
+          name: "MusicDL ${{ github.ref_name }}"
           generate_release_notes: true
           files: |
-            windows/MUSIC DL.exe
+            windows/MusicDL.exe

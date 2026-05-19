@@ -26,7 +26,7 @@ def _get_app_data_dir() -> str:
         base = os.path.expanduser("~/Library/Application Support")
     else:
         base = os.path.expanduser("~/.config")
-    d = os.path.join(base, "MUSIC DL")
+    d = os.path.join(base, "MusicDL")
     try:
         os.makedirs(d, exist_ok=True)
     except Exception:
@@ -531,7 +531,7 @@ def main():
     api = Api()
     index_path = os.path.join(FRONTEND_DIR, "index.html")
     webview.create_window(
-        title="MUSIC DL",
+        title="MusicDL",
         url=index_path,
         js_api=api,
         width=1100,
