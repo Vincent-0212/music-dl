@@ -2,7 +2,6 @@
 """PyInstaller spec — Windows — MUSIC DL"""
 
 import os
-import re
 import sys
 from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
@@ -16,67 +15,19 @@ if not os.path.exists('ffmpeg.exe'):
         "Run the GitHub workflow, or manually place ffmpeg.exe here."
     )
 
-
-# ─── Auto-discover all packages from requirements files ───────────────────────
-# Instead of maintaining a manual list (and chasing each missing data file one
-# at a time), enumerate every package declared in our requirements files and
-# call collect_all on each. This bundles data files (DBs, JSON, templates,
-# native DLLs) for every direct dep transparently.
-
-def _read_req_pkgs(*paths):
-    pkgs = []
-    for path in paths:
-        if not os.path.exists(path):
-            continue
-        with open(path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.split('#', 1)[0].strip()
-                if not line:
-                    continue
-                m = re.match(r'^([A-Za-z0-9_.\-]+)', line)
-                if m:
-                    pkgs.append(m.group(1).lower())
-    return list(dict.fromkeys(pkgs))
-
-
-# Map PyPI dist names → Python import names (only for ones that differ)
-_PIP_TO_IMPORT = {
-    'pywebview': 'webview',
-    'soundcloud-v2': 'soundcloud_v2',
-    'beautifulsoup4': 'bs4',
-    'python-dateutil': 'dateutil',
-    'python-slugify': 'slugify',
-    'python-multipart': 'multipart',
-    'pyyaml': 'yaml',
-    'pyinstaller': None,           # build tool, not a runtime dep
-    'pycryptodome': 'Crypto',
-    'pycryptodomex': 'Cryptodome',
-    'protobuf': 'google.protobuf',
-}
-
-_pip_pkgs = _read_req_pkgs('requirements.txt', 'SpotdlRip/requirements.txt')
-
+# ─── Data / binary / hiddenimport collection ───────────────────────────────────
 datas = []
 binaries = []
 hiddenimports = []
 
-# Bulletproof collect_all loop: every package from requirements gets its
-# data files + binaries + submodules included. Single-file modules emit a
-# harmless "not a package" warning — we don't care.
-for _pip_name in _pip_pkgs:
-    if _pip_name in _PIP_TO_IMPORT:
-        _import_name = _PIP_TO_IMPORT[_pip_name]
-        if _import_name is None:
-            continue
-    else:
-        _import_name = _pip_name.replace('-', '_')
-    try:
-        _d, _b, _h = collect_all(_import_name)
-        datas += _d
-        binaries += _b
-        hiddenimports += _h
-    except Exception:
-        pass  # not installed or not collectable — non-fatal
+for pkg in (
+    'spotdl', 'ytmusicapi', 'yt_dlp', 'certifi', 'spotipy', 'tls_client',
+    'pykakasi', 'syncedlyrics', 'soundcloud_v2',
+):
+    d, b, h = collect_all(pkg)
+    datas += d
+    binaries += b
+    hiddenimports += h
 
 # pywebview backends (Windows: winforms + edge)
 datas += collect_data_files('webview', subdir='js')
