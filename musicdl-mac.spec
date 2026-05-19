@@ -77,6 +77,6 @@ app = BUNDLE(
     info_plist={
         'NSHighResolutionCapable': True,
         'NSMicrophoneUsageDescription': 'Not used.',
-        'CFBundleShortVersionString': '1.0.0',
+        'CFBundleShortVersionString': '1.0.1',
     },
 )
