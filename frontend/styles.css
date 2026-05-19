@@ -691,43 +691,17 @@ html, body {
 .progress-card.error  .download-fill { background: var(--danger); }
 .progress-card.cancelled .download-fill { background: var(--fg-faint); }
 
-.worker-meta {
-  display: flex;
-  gap: 10px;
-  font-size: 11px;
-  color: var(--fg-faint);
-  min-height: 14px;
-}
-
-.worker-info {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 16px;
-}
-.info-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.info-sep {
-  color: var(--line);
-  font-size: 12px;
-  user-select: none;
-}
-.info-label {
-  font-size: 10.5px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--fg-faint);
-  white-space: nowrap;
-}
-.info-value {
-  font-size: 12px;
-  color: var(--fg-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+.progress-error {
+  background: rgba(185, 74, 58, 0.08);
+  border: 1px solid rgba(185, 74, 58, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: var(--danger);
+  font-family: 'SF Mono', 'Fira Code', Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 /* ---------- Progress footer ---------- */

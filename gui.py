@@ -11,9 +11,54 @@ import asyncio
 import threading
 import time
 import uuid
+import logging
+from logging.handlers import RotatingFileHandler
 from typing import Dict, List
 
 _ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*[A-Za-z]')
+
+# ── App-data dir & file logging (must happen before any imports that could fail)
+
+def _get_app_data_dir() -> str:
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+    elif sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        base = os.path.expanduser("~/.config")
+    d = os.path.join(base, "MUSIC DL")
+    try:
+        os.makedirs(d, exist_ok=True)
+    except Exception:
+        d = os.path.expanduser("~")
+    return d
+
+LOG_DIR = _get_app_data_dir()
+LOG_PATH = os.path.join(LOG_DIR, "music-dl.log")
+
+def _setup_logging():
+    # When frozen with console=False, stdout/stderr are detached — redirect to log file
+    if getattr(sys, 'frozen', False):
+        try:
+            f = open(LOG_PATH, "a", encoding="utf-8", buffering=1)
+            sys.stdout = f
+            sys.stderr = f
+        except Exception:
+            pass
+    handler = RotatingFileHandler(LOG_PATH, maxBytes=2_000_000, backupCount=2, encoding="utf-8")
+    handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    root.addHandler(handler)
+    logging.info("=" * 60)
+    logging.info(
+        "MUSIC DL starting | frozen=%s | python=%s | exe=%s",
+        getattr(sys, 'frozen', False), sys.version.split()[0], sys.executable
+    )
+    if getattr(sys, 'frozen', False):
+        logging.info("_MEIPASS=%s", getattr(sys, '_MEIPASS', 'N/A'))
+
+_setup_logging()
 
 import webview
 
@@ -30,12 +75,17 @@ if BASE_DIR not in sys.path:
 if _BUNDLE_DIR not in sys.path:
     sys.path.insert(0, _BUNDLE_DIR)
 
-from platforms import (
-    detect_platform, detect_kind, process_url, DownloadEvents,
-    PLATFORM_LABELS, load_config, save_config,
-)
-from platforms.common import CancelledError
-from platforms.spotify import build_spotify_client
+try:
+    from platforms import (
+        detect_platform, detect_kind, process_url, DownloadEvents,
+        PLATFORM_LABELS, load_config, save_config,
+    )
+    from platforms.common import CancelledError
+    from platforms.spotify import build_spotify_client
+    logging.info("All platform modules imported OK")
+except Exception as _import_err:
+    logging.exception("CRITICAL: failed to import platform modules: %s", _import_err)
+    raise
 
 
 FRONTEND_DIR = os.path.join(_BUNDLE_DIR, "frontend")
@@ -127,6 +177,12 @@ class Api:
             import subprocess
             subprocess.Popen(["xdg-open", path])
         return {"ok": True}
+
+    def get_log_path(self):
+        return {"log_path": LOG_PATH, "log_dir": LOG_DIR}
+
+    def open_log_folder(self):
+        return self.open_folder(LOG_DIR)
 
     def retry_failed(self, job_id: str):
         orig = self._progress.get(job_id)
@@ -351,13 +407,15 @@ class Api:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
+            logging.info("Job %s: starting process_url for %s", job_id, url[:72])
             result = loop.run_until_complete(process_url(url, events, cfg, spotify_client=sp))
             if result is None and not state.get("done"):
-                msg = "Aucune information recuperee (URL invalide ou inaccessible)."
+                msg = "No data returned — URL invalid or unreachable."
                 state["status"] = "error"
                 state["error_message"] = state.get("error_message") or msg
                 state["done"] = True
                 _clog(state["error_message"], "ERR")
+                logging.error("Job %s: %s", job_id, state["error_message"])
         except CancelledError:
             state["cancelled"] = True
             state["status"] = "cancelled"
@@ -366,14 +424,32 @@ class Api:
             _clog("Job annule par l'utilisateur.", "WRN")
             print(f"  {_LOG_SEP}\n", flush=True)
         except Exception as e:
+            import traceback as _tb
             state["error_message"] = str(e)
             state["log"].append({"level": "error", "msg": f"Exception: {e}"})
             state["status"] = "error"
             state["done"] = True
             _clog(f"Exception non geree: {e}", "ERR")
-            import traceback; traceback.print_exc()
+            logging.exception("Job %s: unhandled Exception: %s", job_id, e)
+            _tb.print_exc()
+            print(f"  {_LOG_SEP}\n", flush=True)
+        except BaseException as e:
+            import traceback as _tb
+            state["error_message"] = f"{type(e).__name__}: {e}"
+            state["log"].append({"level": "error", "msg": state["error_message"]})
+            state["status"] = "error"
+            state["done"] = True
+            _clog(f"Fatal BaseException: {state['error_message']}", "ERR")
+            logging.critical("Job %s: BaseException: %s", job_id, state["error_message"])
+            _tb.print_exc()
             print(f"  {_LOG_SEP}\n", flush=True)
         finally:
+            # Guarantee the job is never left in a non-terminal state
+            if not state.get("done"):
+                state["status"] = "error"
+                state["error_message"] = state.get("error_message") or "Job ended unexpectedly."
+                state["done"] = True
+                logging.error("Job %s: finally-guard triggered — state was not finalized", job_id)
             try:
                 loop.close()
             except Exception:
@@ -381,6 +457,43 @@ class Api:
 
 
 def main():
+    if "--selftest" in sys.argv:
+        logging.info("=== SELFTEST MODE ===")
+        errors = []
+        try:
+            import yt_dlp
+            logging.info("selftest: yt_dlp OK (%s)", getattr(yt_dlp, '__version__', '?'))
+        except Exception as e:
+            errors.append(f"yt_dlp: {e}")
+        try:
+            from spotdl.providers.audio.ytmusic import YouTubeMusic
+            logging.info("selftest: spotdl.ytmusic OK")
+        except Exception as e:
+            errors.append(f"spotdl.ytmusic: {e}")
+        try:
+            import spotipy, mutagen, aiohttp, ytmusicapi
+            logging.info("selftest: spotipy/mutagen/aiohttp/ytmusicapi OK")
+        except Exception as e:
+            errors.append(f"spotipy/mutagen/aiohttp/ytmusicapi: {e}")
+        try:
+            from platforms.common import get_bundled_ffmpeg
+            ff = get_bundled_ffmpeg()
+            if ff:
+                logging.info("selftest: ffmpeg OK (%s)", ff)
+            else:
+                errors.append("ffmpeg: not found in any candidate path")
+        except Exception as e:
+            errors.append(f"ffmpeg lookup: {e}")
+        if errors:
+            for err in errors:
+                logging.error("SELFTEST FAIL: %s", err)
+            print(f"SELFTEST FAILED: {'; '.join(errors)}", flush=True)
+            sys.exit(1)
+        logging.info("SELFTEST PASSED")
+        print("SELFTEST PASSED", flush=True)
+        sys.exit(0)
+
+    logging.info("main(): frontend=%s", FRONTEND_DIR)
     api = Api()
     index_path = os.path.join(FRONTEND_DIR, "index.html")
     webview.create_window(

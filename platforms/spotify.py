@@ -5,6 +5,7 @@ Supports both playlists and single tracks. Implements incremental sync
 """
 
 import os
+import sys
 import asyncio
 import threading
 import webbrowser
@@ -72,8 +73,22 @@ def _capture_oauth_code(auth_url: str, timeout: int = 120) -> str:
         server.shutdown()
 
 
+def _get_spotify_cache_path() -> str:
+    """Return a writable path for the Spotipy token cache (not inside a frozen read-only bundle)."""
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+    elif sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        base = os.path.expanduser("~/.config")
+    d = os.path.join(base, "MUSIC DL")
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, ".spotify-cache")
+
+
 def build_spotify_client(client_id: str, client_secret: str) -> spotipy.Spotify:
-    cache_path = os.path.join(BASE_DIR, ".cache")
+    import logging
+    cache_path = _get_spotify_cache_path()
     if os.path.exists(cache_path):
         os.remove(cache_path)
     auth_manager = SpotifyOAuth(
@@ -84,9 +99,11 @@ def build_spotify_client(client_id: str, client_secret: str) -> spotipy.Spotify:
         open_browser=False,
         cache_path=cache_path,
     )
+    logging.info("Spotify OAuth: opening browser for user consent")
     code = _capture_oauth_code(auth_manager.get_authorize_url())
     token_info = auth_manager.get_access_token(code)
     access_token = token_info["access_token"] if isinstance(token_info, dict) else token_info
+    logging.info("Spotify OAuth: token obtained")
     return spotipy.Spotify(auth=access_token)
 
 

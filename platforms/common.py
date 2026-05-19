@@ -4,6 +4,8 @@ import os
 import re
 import json
 import sys
+import shutil
+import logging
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -354,12 +356,22 @@ def download_audio(source_url: str, output_dir: str, filename: str,
 
 
 def get_bundled_ffmpeg() -> Optional[str]:
-    """Return path to FFmpeg bundled inside the PyInstaller package, or None."""
+    """Return path to FFmpeg: bundled bundle > exe dir > PATH. Logs result."""
+    candidates = []
     if getattr(sys, 'frozen', False):
-        for name in ('ffmpeg.exe', 'ffmpeg'):
-            p = os.path.join(sys._MEIPASS, name)
-            if os.path.exists(p):
-                return p
+        meipass = getattr(sys, '_MEIPASS', None)
+        if meipass:
+            candidates += [os.path.join(meipass, n) for n in ('ffmpeg.exe', 'ffmpeg')]
+        exe_dir = os.path.dirname(sys.executable)
+        candidates += [os.path.join(exe_dir, n) for n in ('ffmpeg.exe', 'ffmpeg')]
+    path_ff = shutil.which('ffmpeg')
+    if path_ff:
+        candidates.append(path_ff)
+    for p in candidates:
+        if p and os.path.isfile(p):
+            logging.info("ffmpeg resolved: %s", p)
+            return p
+    logging.error("ffmpeg NOT FOUND — candidates tried: %s", candidates)
     return None
 
 

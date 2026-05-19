@@ -10,7 +10,6 @@ const state = {
   rows: [],            // [{id, url, platform, kind, el}]
   config: null,
   progressPollId: null,
-  jobs: {},            // job_id -> {startedAt} client-side cache
 };
 
 const notifiedJobs = new Set();
@@ -33,16 +32,6 @@ const STRINGS = {
     open_folder: 'Open folder',
     retry: (n) => `↺ Retry (${n})`,
     loading: 'Loading…', track: 'Track',
-  },
-  info: {
-    time_remaining: 'Time remaining',
-    speed: 'Speed',
-    calculating: 'Calculating…',
-  },
-  counters: {
-    downloaded: (n) => `${n} downloaded`,
-    skipped: (n) => `${n} skipped`,
-    failed: (n) => `${n} failed`,
   },
   notification: {
     body: (name, n) => `${name} — ${n} track${n !== 1 ? 's' : ''} downloaded`,
@@ -130,6 +119,7 @@ function bindEvents() {
   $('#audio-quality').addEventListener('change', saveAudioQuality);
   $('#toggle-secret').addEventListener('click', toggleSecretReveal);
   $('#music-updater').addEventListener('change', saveMusicUpdater);
+  $('#open-logs').addEventListener('click', () => api().open_log_folder().catch(() => {}));
   $('#start-btn').addEventListener('click', startDownloads);
   $('#reset-btn').addEventListener('click', resetAllRows);
   $('#clear-done-btn').addEventListener('click', clearCompletedJobs);
@@ -468,18 +458,8 @@ function renderProgress(jobs) {
             <span class="worker-count"></span>
           </div>
           <div class="worker-bar"><div class="worker-bar-fill download-fill"></div></div>
-          <div class="worker-info" hidden>
-            <div class="info-item">
-              <span class="info-label">${STRINGS.info.time_remaining}</span>
-              <span class="info-value eta-value">—</span>
-            </div>
-            <div class="info-item info-sep">·</div>
-            <div class="info-item">
-              <span class="info-label">${STRINGS.info.speed}</span>
-              <span class="info-value speed-value">—</span>
-            </div>
-          </div>
         </div>
+        <div class="progress-error" hidden></div>
         <div class="progress-footer">
           <div class="progress-counters"></div>
           <div class="progress-footer-actions">
@@ -545,31 +525,17 @@ function renderProgress(jobs) {
     dlWorker.querySelector('.download-fill').style.width =
       (job.status === 'done' ? 100 : dlPct).toFixed(1) + '%';
 
-    // ETA + Speed (client-side)
-    const jobCache = state.jobs[job.job_id] || (state.jobs[job.job_id] = {});
-    if (job.status === 'downloading' && !jobCache.startedAt) {
-      jobCache.startedAt = Date.now() / 1000;
-    }
-    const etaEl = dlWorker.querySelector('.eta-value');
-    const speedEl = dlWorker.querySelector('.speed-value');
-    speedEl.textContent = formatSpeed(job.current_speed);
-    let etaDisplay = '—';
-    if (jobCache.startedAt && done > 0 && !job.done) {
-      const elapsed = Date.now() / 1000 - jobCache.startedAt;
-      if (elapsed > 3) {
-        const rate = done / elapsed;
-        const remaining = job.total - done;
-        if (rate > 0.001 && remaining > 0) etaDisplay = formatEta(remaining / rate);
-        else etaDisplay = STRINGS.info.calculating;
-      } else {
-        etaDisplay = STRINGS.info.calculating;
-      }
-    }
-    etaEl.textContent = etaDisplay;
-    dlWorker.querySelector('.worker-info').hidden = !job.current_speed && !jobCache.startedAt;
-
     // ── Footer ──────────────────────────────────────────────
     card.querySelector('.progress-counters').textContent = formatCounters(job);
+
+    // ── Error message ────────────────────────────────────────
+    const errEl = card.querySelector('.progress-error');
+    if (job.error_message) {
+      errEl.textContent = job.error_message;
+      errEl.hidden = false;
+    } else {
+      errEl.hidden = true;
+    }
 
     const cancelBtn    = card.querySelector('.cancel-btn');
     const dismissBtn   = card.querySelector('.dismiss-btn');
@@ -584,31 +550,12 @@ function renderProgress(jobs) {
   }
 }
 
-function formatEta(sec) {
-  if (sec < 60) return '< 1 min';
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return s > 0 ? `~${m} min ${s}s` : `~${m} min`;
-}
-
-function formatSpeed(raw) {
-  if (!raw) return '—';
-  return raw
-    .replace(/KiB\/s/g, ' KB/s')
-    .replace(/MiB\/s/g, ' MB/s')
-    .replace(/GiB\/s/g, ' GB/s')
-    .trim() || '—';
-}
-
 function formatCounters(job) {
   if (!job.total) return '';
-  const parts = [];
-  if (job.downloaded) parts.push(STRINGS.counters.downloaded(job.downloaded));
-  if (job.skipped)    parts.push(STRINGS.counters.skipped(job.skipped));
-  if (job.failed)     parts.push(STRINGS.counters.failed(job.failed));
-  if (!parts.length)  parts.push(`0 / ${job.total}`);
-  else parts.push(`/ ${job.total}`);
-  return parts.join(' · ');
+  const done = job.downloaded + job.skipped;
+  let txt = `${done}/${job.total} Tracks downloaded`;
+  if (job.failed) txt += ` | ${job.failed} Failed`;
+  return txt;
 }
 
 async function cancelJob(jobId) {
