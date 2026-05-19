@@ -21,6 +21,24 @@ if errorlevel 1 (
 
 for /f "tokens=*" %%v in ('python --version 2^>^&1') do echo [OK] %%v detecte
 
+REM ── Verifier la compatibilite de la version Python ───────────
+for /f %%v in ('python -c "import sys; print(sys.version_info.minor)"') do set PYMINOR=%%v
+for /f %%v in ('python -c "import sys; print(sys.version_info.major)"') do set PYMAJOR=%%v
+if %PYMAJOR% GEQ 3 (
+    if %PYMINOR% GEQ 13 (
+        echo.
+        echo [ATTENTION] Python 3.%PYMINOR% detecte.
+        echo             pywebview requiert Python 3.10 a 3.12 sur Windows.
+        echo             Python 3.13+ n'est pas encore supporte.
+        echo.
+        echo             Telecharge Python 3.12 : https://python.org/downloads/
+        echo             et relance ce fichier.
+        echo.
+        pause
+        exit /b 1
+    )
+)
+
 REM ── Installer / mettre a jour les dependances ────────────────
 echo.
 echo [1/2] Dependances principales  (requirements.txt)...
