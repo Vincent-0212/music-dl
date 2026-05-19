@@ -329,7 +329,8 @@ def download_audio(source_url: str, output_dir: str, filename: str,
             events.track_progress(track_num, 100.0, "converting...")
 
     opts = {
-        "format": "bestaudio/best",
+        # Prefer m4a (always available on ios/android clients) then any audio stream.
+        "format": "bestaudio[ext=m4a]/bestaudio/best",
         "outtmpl": os.path.join(output_dir, f"{filename}.%(ext)s"),
         "postprocessors": [{
             "key": "FFmpegExtractAudio",
@@ -339,10 +340,11 @@ def download_audio(source_url: str, output_dir: str, filename: str,
         "progress_hooks": [progress_hook],
         "quiet": True,
         "no_warnings": True,
-        # YouTube's default web client now requires a JS runtime (deno/node).
-        # tv_embedded + ios + android work without one and are reliable.
+        # ios + android clients don't require a JS runtime AND have full
+        # format access for music content. tv_embedded is an iframe client
+        # with restricted format access for copyrighted music — avoid it.
         # (Ignored by yt-dlp for non-YouTube sources like SoundCloud.)
-        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "ios", "android"]}},
+        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
     }
     ffmpeg = get_bundled_ffmpeg()
     if ffmpeg:

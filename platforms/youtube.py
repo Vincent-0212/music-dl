@@ -33,9 +33,8 @@ async def process(url: str, events: DownloadEvents, config: dict, kind: str = "p
         "no_warnings": True,
         "ignoreerrors": True,
         "extract_flat": False,
-        # YouTube's default web client now requires a JS runtime (deno/node).
-        # tv_embedded + ios + android work without one and are reliable.
-        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "ios", "android"]}},
+        # ios + android: no JS runtime needed, full format access for music.
+        "extractor_args": {"youtube": {"player_client": ["ios", "android"]}},
     }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:

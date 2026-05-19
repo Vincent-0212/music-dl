@@ -319,9 +319,13 @@ async def process(url: str, events: DownloadEvents, config: dict, sp=None) -> Pl
                 except Exception as e:
                     events.log(f"SpotdlRip [{label}]: {e}", level="warn")
 
-            # Fallback: yt-dlp YouTube search (always works)
+            # Fallback: YouTube search. "auto" suffix targets the auto-generated
+            # Topic channel uploads which are official audio and less likely to have
+            # region/format restrictions than official music videos.
             if not yt_url:
-                yt_url = f"ytsearch1:{label}"
+                artist0 = track["artists"][0] if track.get("artists") else track.get("artists_str", "")
+                title = track["title"]
+                yt_url = f"ytsearch1:{artist0} - {title} auto"
 
             track["yt_url"] = yt_url
             events.resolve_progress(idx + 1, total_to_process, label, True)
@@ -456,7 +460,7 @@ async def process_track(url: str, events: DownloadEvents, config: dict, sp=None)
     except Exception as _e:
         events.log(f"SpotdlRip: {_e} — recherche YouTube utilisee.", level="warn")
     if not yt_url:
-        yt_url = f"ytsearch1:{label}"
+        yt_url = f"ytsearch1:{label} auto"
     track["yt_url"] = yt_url
 
     events.track_start(1, 1, label)
@@ -569,7 +573,7 @@ async def process_album(url: str, events: DownloadEvents, config: dict, sp=None)
                 except Exception as e:
                     events.log(f"SpotdlRip [{label}]: {e}", level="warn")
             if not yt_url:
-                yt_url = f"ytsearch1:{label}"
+                yt_url = f"ytsearch1:{label} auto"
             track["yt_url"] = yt_url
             events.resolve_progress(idx + 1, total_to_process, label, True)
             await queue.put(track)
