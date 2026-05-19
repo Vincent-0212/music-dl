@@ -18,7 +18,10 @@ datas = []
 binaries = []
 hiddenimports = []
 
-for pkg in ('spotdl', 'ytmusicapi', 'yt_dlp', 'certifi', 'spotipy', 'tls_client', 'spotipyfree'):
+for pkg in (
+    'spotdl', 'ytmusicapi', 'yt_dlp', 'certifi', 'spotipy', 'tls_client',
+    'pykakasi', 'syncedlyrics', 'soundcloud_v2',
+):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -37,7 +40,7 @@ hiddenimports += [
     'webview.platforms.cocoa',
     'objc',
     'Foundation', 'AppKit', 'WebKit',
-    'tls_client', 'spotipyfree',
+    'tls_client',
     'spotdl.providers.audio.youtube',
     'spotdl.providers.audio.ytmusic',
     'spotdl.providers.audio.soundcloud',
