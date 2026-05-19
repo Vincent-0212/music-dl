@@ -54,4 +54,4 @@ websockets==14.2
 wrapt==2.1.2
 yarl==1.23.0
 yt-dlp>=2026.3.17
-ytmusicapi==1.11.5
+ytmusicapi>=1.12.0,<2
