@@ -11,7 +11,13 @@ from typing import Callable, Optional, List, Dict, Any
 
 import yt_dlp
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# When frozen by PyInstaller, the exe lives next to config.json / downloads.
+# sys._MEIPASS is the read-only temp dir; sys.executable is the actual exe.
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 SINGLES_FOLDER_NAME = "SINGLES"
 
@@ -334,11 +340,27 @@ def download_audio(source_url: str, output_dir: str, filename: str,
         "quiet": True,
         "no_warnings": True,
     }
+    ffmpeg = get_bundled_ffmpeg()
+    if ffmpeg:
+        opts["ffmpeg_location"] = os.path.dirname(ffmpeg)
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([source_url])
 
 
+def get_bundled_ffmpeg() -> Optional[str]:
+    """Return path to FFmpeg bundled inside the PyInstaller package, or None."""
+    if getattr(sys, 'frozen', False):
+        for name in ('ffmpeg.exe', 'ffmpeg'):
+            p = os.path.join(sys._MEIPASS, name)
+            if os.path.exists(p):
+                return p
+    return None
+
+
 def ensure_spotdlrip_on_path():
-    sp_dir = os.path.join(BASE_DIR, "SpotdlRip")
+    if getattr(sys, 'frozen', False):
+        sp_dir = os.path.join(sys._MEIPASS, "SpotdlRip")
+    else:
+        sp_dir = os.path.join(BASE_DIR, "SpotdlRip")
     if sp_dir not in sys.path:
         sys.path.insert(0, sp_dir)

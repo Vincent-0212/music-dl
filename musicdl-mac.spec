@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec — Windows — MUSIC DL"""
+"""PyInstaller spec — macOS — MUSIC DL"""
 
 import os
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
@@ -9,7 +9,6 @@ block_cipher = None
 # ─── Data files ───────────────────────────────────────────────────────────────
 datas = []
 datas += collect_data_files('webview', subdir='js')
-datas += collect_data_files('webview', subdir='lib')
 datas += collect_data_files('spotdl')
 datas += collect_data_files('ytmusicapi')
 datas += [('frontend', 'frontend')]
@@ -18,14 +17,14 @@ datas += [('platforms', 'platforms')]
 
 # ─── FFmpeg binary (downloaded by CI to project root before build) ─────────────
 binaries = []
-if os.path.exists('ffmpeg.exe'):
-    binaries.append(('ffmpeg.exe', '.'))
+if os.path.exists('ffmpeg'):
+    binaries.append(('ffmpeg', '.'))
 
 # ─── Hidden imports ────────────────────────────────────────────────────────────
 hiddenimports = [
-    'webview.platforms.winforms',
-    'webview.platforms.edgechromium',
-    'clr',
+    'webview.platforms.cocoa',
+    'objc',
+    'Foundation', 'AppKit', 'WebKit',
     'spotipy', 'spotipy.oauth2',
     'spotdl.providers.audio.ytmusic', 'spotdl.types.song',
     'ytmusicapi',
@@ -64,9 +63,20 @@ exe = EXE(
     name='MUSIC DL',
     debug=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,          # UPX not recommended on macOS
     console=False,
-    # icon='frontend/icon.ico',
+    # icon='frontend/icon.icns',
+)
+
+# macOS .app bundle
+app = BUNDLE(
+    exe,
+    name='MUSIC DL.app',
+    icon=None,          # replace with 'frontend/icon.icns' if you add one
+    bundle_identifier='com.vincentd.musicdl',
+    info_plist={
+        'NSHighResolutionCapable': True,
+        'NSMicrophoneUsageDescription': 'Not used.',
+        'CFBundleShortVersionString': '1.0.0',
+    },
 )

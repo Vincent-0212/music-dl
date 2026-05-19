@@ -13,9 +13,18 @@ from typing import Dict, List
 
 import webview
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    # Running as a PyInstaller bundle
+    BASE_DIR = os.path.dirname(sys.executable)
+    _BUNDLE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    _BUNDLE_DIR = BASE_DIR
+
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
+if _BUNDLE_DIR not in sys.path:
+    sys.path.insert(0, _BUNDLE_DIR)
 
 from platforms import (
     detect_platform, detect_kind, process_url, DownloadEvents,
@@ -25,7 +34,7 @@ from platforms.common import CancelledError
 from platforms.spotify import build_spotify_client
 
 
-FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+FRONTEND_DIR = os.path.join(_BUNDLE_DIR, "frontend")
 
 
 class Api:
