@@ -123,6 +123,9 @@ function addRow() {
   return entry;
 }
 
+const TYPE_LABELS = { playlist: 'PLAYLIST', album: 'ALBUM', track: 'TRACK' };
+function shortLabel(p) { return { spotify: 'SP', soundcloud: 'SC', youtube: 'YT' }[p] || '?'; }
+
 async function handleRowInput(entry, input, wrap, chip) {
   const url = input.value.trim();
   entry.url = url;
@@ -130,8 +133,8 @@ async function handleRowInput(entry, input, wrap, chip) {
 
   if (!url) {
     chip.hidden = true;
-    chip.classList.remove('spotify','soundcloud','youtube','invalid','config');
-    wrap.classList.remove('has-platform','spotify','soundcloud','youtube','invalid');
+    chip.className = 'platform-chip';
+    wrap.classList.remove('valid', 'invalid');
     entry.platform = null;
     entry.kind = null;
     updateActionBar();
@@ -143,22 +146,23 @@ async function handleRowInput(entry, input, wrap, chip) {
   entry.platform = info && info.platform;
   entry.kind = info && info.kind;
 
-  wrap.classList.remove('has-platform','spotify','soundcloud','youtube','invalid');
-  chip.classList.remove('spotify','soundcloud','youtube','invalid','config');
+  wrap.classList.remove('valid', 'invalid');
+  chip.className = 'platform-chip';
 
   if (entry.platform) {
-    wrap.classList.add('has-platform', entry.platform);
-    chip.classList.add(entry.platform);
-    chip.innerHTML = `${shortLabel(entry.platform)}<span class="kind">${entry.kind === 'track' ? ' · TRACK' : ''}</span>`;
-    chip.hidden = false;
-    chip.title = '';
-
+    // Spotify not configured — show warning
     if (entry.platform === 'spotify' && state.config && !state.config.spotify_configured) {
       wrap.classList.add('invalid');
       chip.classList.add('config');
-      chip.classList.remove('spotify');
       chip.innerHTML = 'CONFIG';
       chip.title = 'Click to open Settings';
+      chip.hidden = false;
+    } else {
+      wrap.classList.add('valid');
+      const typeLabel = TYPE_LABELS[entry.kind] || (entry.kind || 'PLAYLIST').toUpperCase();
+      chip.innerHTML = `<span class="chip-platform chip-${entry.platform}">${shortLabel(entry.platform)}</span><span class="chip-type">${typeLabel}</span>`;
+      chip.title = '';
+      chip.hidden = false;
     }
   } else {
     wrap.classList.add('invalid');
@@ -170,8 +174,6 @@ async function handleRowInput(entry, input, wrap, chip) {
   ensureTrailingEmptyRow();
   updateActionBar();
 }
-
-function shortLabel(p) { return { spotify: 'SP', soundcloud: 'SC', youtube: 'YT' }[p] || '?'; }
 
 function removeRow(entry) {
   if (state.rows.length <= 1) {
@@ -226,11 +228,13 @@ function updateActionBar() {
     const blocked = filled.length - valid.length;
     meta.textContent = `${valid.length} ready · ${blocked} blocked (Spotify creds)`;
   } else {
-    const trackCount = valid.filter(v => v.kind === 'track').length;
-    const playlistCount = valid.length - trackCount;
+    const trackCount    = valid.filter(v => v.kind === 'track').length;
+    const albumCount    = valid.filter(v => v.kind === 'album').length;
+    const playlistCount = valid.filter(v => v.kind === 'playlist').length;
     const parts = [];
     if (playlistCount) parts.push(`${playlistCount} playlist${playlistCount > 1 ? 's' : ''}`);
-    if (trackCount) parts.push(`${trackCount} track${trackCount > 1 ? 's' : ''}`);
+    if (albumCount)    parts.push(`${albumCount} album${albumCount > 1 ? 's' : ''}`);
+    if (trackCount)    parts.push(`${trackCount} track${trackCount > 1 ? 's' : ''}`);
     meta.textContent = parts.join(' · ') + ' queued';
   }
 }
@@ -246,6 +250,20 @@ async function startDownloads() {
     .map(r => r.url);
 
   if (!urls.length) return;
+
+  // First launch: prompt for output folder if not configured
+  const cfg = await api().get_config().catch(() => ({}));
+  if (!cfg.output_dir) {
+    $('#action-meta').textContent = 'Select a download folder…';
+    const folder = await api().pick_folder().catch(() => null);
+    if (!folder) {
+      $('#action-meta').textContent = 'No folder selected.';
+      updateActionBar();
+      return;
+    }
+    await api().update_settings({ output_dir: folder }).catch(() => {});
+    state.config = await api().get_config().catch(() => state.config);
+  }
 
   $('#start-btn').disabled = true;
   $('#progress-panel').hidden = false;

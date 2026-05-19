@@ -53,14 +53,14 @@ async def process(url: str, events: DownloadEvents, config: dict, kind: str = "p
     if is_single:
         track = _entry_to_track(entries[0])
         label = f"{track['artists']} - {track['title']}"
-        folder_path = get_singles_folder(output_dir)
-        folder_name = "SINGLES"
+        folder_path = output_dir
+        folder_name = os.path.basename(output_dir)
         events.playlist_start("youtube", label, 1, folder_name)
 
         filename = sanitize_filename(label)
         mp3_path = os.path.join(folder_path, f"{filename}.mp3")
         if music_updater and os.path.exists(mp3_path):
-            events.log("Deja present dans SINGLES/.")
+            events.log("Deja telecharge.")
             events.playlist_done(folder_name, 0, 1, 1)
             return PlaylistResult("youtube", "track", label, folder_name, folder_path, 1, 0, 1, 0, [track])
 
