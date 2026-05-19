@@ -339,6 +339,10 @@ def download_audio(source_url: str, output_dir: str, filename: str,
         "progress_hooks": [progress_hook],
         "quiet": True,
         "no_warnings": True,
+        # YouTube's default web client now requires a JS runtime (deno/node).
+        # tv_embedded + ios + android work without one and are reliable.
+        # (Ignored by yt-dlp for non-YouTube sources like SoundCloud.)
+        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "ios", "android"]}},
     }
     ffmpeg = get_bundled_ffmpeg()
     if ffmpeg:

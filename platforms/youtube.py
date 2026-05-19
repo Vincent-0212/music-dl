@@ -28,7 +28,15 @@ async def process(url: str, events: DownloadEvents, config: dict, kind: str = "p
     events.log("Recuperation YouTube...")
     events.check_cancel()
 
-    opts = {"quiet": True, "no_warnings": True, "ignoreerrors": True, "extract_flat": False}
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "ignoreerrors": True,
+        "extract_flat": False,
+        # YouTube's default web client now requires a JS runtime (deno/node).
+        # tv_embedded + ios + android work without one and are reliable.
+        "extractor_args": {"youtube": {"player_client": ["tv_embedded", "ios", "android"]}},
+    }
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
