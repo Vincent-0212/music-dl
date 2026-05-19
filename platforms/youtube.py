@@ -32,10 +32,7 @@ async def process(url: str, events: DownloadEvents, config: dict, kind: str = "p
         "quiet": True,
         "no_warnings": True,
         "ignoreerrors": True,
-        # "in_playlist" = flat extraction for playlist entries (fast, no JS needed),
-        # full extraction for standalone video URLs. Never use False: it fetches full
-        # info for every playlist entry upfront which is slow and hits rate limits.
-        "extract_flat": "in_playlist",
+        "extract_flat": False,
         # YouTube's default web client now requires a JS runtime (deno/node).
         # tv_embedded + ios + android work without one and are reliable.
         "extractor_args": {"youtube": {"player_client": ["tv_embedded", "ios", "android"]}},

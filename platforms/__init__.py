@@ -22,13 +22,14 @@ def detect_kind(url: str):
     if not url:
         return None
     u = url.lower().strip()
-    # Spotify
-    if "spotify.com/playlist/" in u or u.startswith("spotify:playlist:"):
-        return "playlist"
-    if "spotify.com/track/" in u or u.startswith("spotify:track:"):
-        return "track"
-    if "spotify.com/album/" in u or u.startswith("spotify:album:"):
-        return "album"
+    # Spotify — handle locale-prefixed URLs like /intl-fr/track/, /intl-en/album/
+    if "spotify.com" in u:
+        if "/playlist/" in u or u.startswith("spotify:playlist:"):
+            return "playlist"
+        if "/track/" in u or u.startswith("spotify:track:"):
+            return "track"
+        if "/album/" in u or u.startswith("spotify:album:"):
+            return "album"
     # YouTube
     if "youtube.com/playlist" in u or ("list=" in u and "watch?" not in u):
         return "playlist"

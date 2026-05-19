@@ -95,24 +95,25 @@ def build_spotify_client(client_id: str, client_secret: str) -> spotipy.Spotify:
 # ------------------------------------------------------------
 
 def _extract_playlist_id(url: str) -> str:
-    if "spotify.com/playlist/" in url:
-        return url.split("spotify.com/playlist/")[1].split("?")[0].split("/")[0]
+    # Works with locale-prefixed URLs: /intl-fr/playlist/, /intl-en/playlist/, etc.
+    if "/playlist/" in url:
+        return url.split("/playlist/")[1].split("?")[0].split("/")[0]
     if url.startswith("spotify:playlist:"):
         return url.split(":")[-1]
     return url
 
 
 def _extract_track_id(url: str) -> str:
-    if "spotify.com/track/" in url:
-        return url.split("spotify.com/track/")[1].split("?")[0].split("/")[0]
+    if "/track/" in url:
+        return url.split("/track/")[1].split("?")[0].split("/")[0]
     if url.startswith("spotify:track:"):
         return url.split(":")[-1]
     return url
 
 
 def _extract_album_id(url: str) -> str:
-    if "spotify.com/album/" in url:
-        return url.split("spotify.com/album/")[1].split("?")[0].split("/")[0]
+    if "/album/" in url:
+        return url.split("/album/")[1].split("?")[0].split("/")[0]
     if url.startswith("spotify:album:"):
         return url.split(":")[-1]
     return url
