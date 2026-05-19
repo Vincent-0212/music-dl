@@ -119,19 +119,54 @@
       <div class="modal-body">
         <div class="field-group">
           <div class="field-title">Spotify credentials</div>
-          <p class="field-hint">
-            Create an app at <span class="mono">developer.spotify.com/dashboard</span>,
-            set the redirect URI to <span class="mono">http://127.0.0.1:8888/callback</span>,
-            then paste your Client ID and Secret here.
-          </p>
+
+          <ol class="setup-steps">
+            <li class="setup-step">
+              <span class="step-num">1</span>
+              <div class="step-body">
+                <div class="step-text">Crée une app sur le dashboard Spotify</div>
+                <button type="button" class="step-link-btn" id="open-spotify-dev">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15 12H9m3-3-3 3 3 3"/></svg>
+                  developer.spotify.com/dashboard
+                  <svg class="link-arrow" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M7 17L17 7M7 7h10v10"/></svg>
+                </button>
+              </div>
+            </li>
+            <li class="setup-step">
+              <span class="step-num">2</span>
+              <div class="step-body">
+                <div class="step-text">Dans les <strong>Settings</strong> de l'app, ajoute cette <strong>Redirect URI</strong> :</div>
+                <button type="button" class="copy-btn" id="copy-redirect-uri" data-copy="http://127.0.0.1:8888/callback">
+                  <span class="mono">http://127.0.0.1:8888/callback</span>
+                  <span class="copy-action">
+                    <span class="copy-label">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                      Copier
+                    </span>
+                    <span class="copy-done">
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                      Copié !
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </li>
+            <li class="setup-step">
+              <span class="step-num">3</span>
+              <div class="step-body">
+                <div class="step-text">Copie le <strong>Client ID</strong> et le <strong>Client Secret</strong> depuis les settings de l'app, puis colle-les ci-dessous.</div>
+              </div>
+            </li>
+          </ol>
+
           <label class="field">
             <span class="field-label">Client ID</span>
-            <input type="text" id="spotify-id" autocomplete="off" spellcheck="false" />
+            <input type="text" id="spotify-id" autocomplete="off" spellcheck="false" placeholder="Paste your Client ID" />
           </label>
           <label class="field">
             <span class="field-label">Client Secret</span>
             <div class="field-with-toggle">
-              <input type="password" id="spotify-secret" autocomplete="off" spellcheck="false" />
+              <input type="password" id="spotify-secret" autocomplete="off" spellcheck="false" placeholder="Paste your Client Secret" />
               <button type="button" class="toggle-reveal" id="toggle-secret" aria-label="Show secret">
                 <svg class="eye-show" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>

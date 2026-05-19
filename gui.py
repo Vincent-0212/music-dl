@@ -93,6 +93,11 @@ class Api:
         save_config(cfg)
         return {"ok": True}
 
+    def open_url(self, url: str):
+        import webbrowser
+        webbrowser.open(url)
+        return {"ok": True}
+
     def pick_folder(self):
         try:
             result = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)

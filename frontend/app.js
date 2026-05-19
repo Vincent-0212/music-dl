@@ -75,6 +75,29 @@ function bindEvents() {
   $('#reset-btn').addEventListener('click', resetAllRows);
   $('#clear-done-btn').addEventListener('click', clearCompletedJobs);
 
+  // Spotify setup helpers
+  $('#open-spotify-dev').addEventListener('click', () => {
+    api().open_url('https://developer.spotify.com/dashboard');
+  });
+
+  $('#copy-redirect-uri').addEventListener('click', () => {
+    const btn = $('#copy-redirect-uri');
+    const text = btn.dataset.copy;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.classList.add('copied');
+      clearTimeout(btn._copyTimer);
+      btn._copyTimer = setTimeout(() => btn.classList.remove('copied'), 2200);
+    }).catch(() => {
+      // Fallback: select the text for manual copy
+      const mono = btn.querySelector('.mono');
+      const range = document.createRange();
+      range.selectNodeContents(mono);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    });
+  });
+
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeSettings();
   });
