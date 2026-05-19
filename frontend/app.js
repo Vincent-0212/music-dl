@@ -10,8 +10,10 @@ const state = {
   rows: [],            // [{id, url, platform, kind, el}]
   config: null,
   progressPollId: null,
-  jobs: {},            // job_id -> state cache for diff rendering
+  jobs: {},            // job_id -> {startedAt} client-side cache
 };
+
+const notifiedJobs = new Set();
 
 let rowSeq = 0;
 
@@ -26,11 +28,16 @@ async function init() {
   if (state._inited) return;
   state._inited = true;
 
+  applyTheme();
   bindEvents();
   await loadConfig();
   addRow();
   updateActionBar();
   applySpotifyState();
+
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 }
 
 async function loadConfig() {
@@ -61,7 +68,27 @@ function applySpotifyState() {
 // Event binding
 // ---------------------------------------------------------
 
+function applyTheme() {
+  const saved = localStorage.getItem('music-dl-theme') || '';
+  document.documentElement.dataset.theme = saved;
+  updateThemeIcon(saved === 'dark');
+}
+
+function toggleTheme() {
+  const isDark = document.documentElement.dataset.theme === 'dark';
+  const next = isDark ? '' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('music-dl-theme', next);
+  updateThemeIcon(!isDark);
+}
+
+function updateThemeIcon(dark) {
+  $('#icon-moon').hidden = dark;
+  $('#icon-sun').hidden = !dark;
+}
+
 function bindEvents() {
+  $('#theme-toggle').addEventListener('click', toggleTheme);
   $('#open-settings').addEventListener('click', openSettings);
   $('#banner-open-settings').addEventListener('click', openSettings);
   $$('#settings-modal [data-close]').forEach(el => el.addEventListener('click', closeSettings));
@@ -345,18 +372,33 @@ async function pollProgress() {
   }
 }
 
+const STATUS_LABELS = {
+  queued: 'En file', running: 'Démarrage', resolving: 'Résolution',
+  downloading: 'Téléchargement', done: 'Terminé', error: 'Erreur',
+  cancelled: 'Annulé', cancelling: 'Annulation…',
+};
+
 function renderProgress(jobs) {
   const list = $('#progress-list');
 
-  // Remove cards whose jobs no longer exist (dismissed)
+  // Remove dismissed cards
   const validIds = new Set(jobs.map(j => j.job_id));
   for (const card of Array.from(list.children)) {
-    if (!validIds.has(card.dataset.jobId)) {
-      card.remove();
-    }
+    if (!validIds.has(card.dataset.jobId)) card.remove();
   }
 
   for (const job of jobs) {
+    // Desktop notification on first done
+    if (job.done && !notifiedJobs.has(job.job_id)) {
+      notifiedJobs.add(job.job_id);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('MUSIC DL', {
+          body: `${job.playlist_name || 'Téléchargement'} — ${job.downloaded} titre(s)`,
+          icon: 'logo.png',
+        });
+      }
+    }
+
     let card = list.querySelector(`[data-job-id="${job.job_id}"]`);
     if (!card) {
       card = document.createElement('div');
@@ -370,76 +412,152 @@ function renderProgress(jobs) {
           </div>
           <div class="progress-head-actions">
             <div class="progress-status"></div>
-            <button class="progress-card-btn cancel-btn danger" title="Cancel" type="button">
+            <button class="progress-card-btn cancel-btn danger" title="Annuler" type="button">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8">
                 <rect x="6" y="6" width="12" height="12" rx="1"/>
               </svg>
             </button>
-            <button class="progress-card-btn dismiss-btn" title="Dismiss" type="button" hidden>
+            <button class="progress-card-btn dismiss-btn" title="Fermer" type="button" hidden>
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
             </button>
           </div>
         </div>
-        <div class="progress-bar"><div class="progress-bar-fill"></div></div>
-        <div class="progress-meta">
-          <div class="progress-current"></div>
+        <div class="worker-row resolve-worker" hidden>
+          <div class="worker-label-row">
+            <span class="worker-tag">↗ Résolution</span>
+            <span class="worker-track-label"></span>
+            <span class="worker-count"></span>
+          </div>
+          <div class="worker-bar"><div class="worker-bar-fill resolve-fill"></div></div>
+        </div>
+        <div class="worker-row download-worker">
+          <div class="worker-label-row">
+            <span class="worker-tag">↓ Téléch.</span>
+            <span class="worker-track-label"></span>
+            <span class="worker-count"></span>
+          </div>
+          <div class="worker-bar"><div class="worker-bar-fill download-fill"></div></div>
+          <div class="worker-meta">
+            <span class="worker-speed"></span>
+            <span class="worker-eta"></span>
+          </div>
+        </div>
+        <div class="progress-footer">
           <div class="progress-counters"></div>
+          <div class="progress-footer-actions">
+            <button class="ghost-btn small open-folder-btn" type="button" hidden>Ouvrir le dossier</button>
+            <button class="ghost-btn small warn retry-btn" type="button" hidden>↺ Relancer</button>
+          </div>
         </div>
       `;
       card.querySelector('.cancel-btn').addEventListener('click', () => cancelJob(job.job_id));
       card.querySelector('.dismiss-btn').addEventListener('click', () => dismissJob(job.job_id));
+      card.querySelector('.open-folder-btn').addEventListener('click', () => {
+        const path = card.dataset.folderPath;
+        if (path) api().open_folder(path).catch(() => {});
+      });
+      card.querySelector('.retry-btn').addEventListener('click', async () => {
+        const res = await api().retry_failed(card.dataset.jobId).catch(() => null);
+        if (res && res.ok) startProgressPolling();
+      });
       list.appendChild(card);
     }
 
-    // Update card content
+    // Persist folder path for open-folder button
+    if (job.folder_path) card.dataset.folderPath = job.folder_path;
+
+    // State classes
     card.classList.toggle('done', job.status === 'done');
     card.classList.toggle('error', job.status === 'error');
     card.classList.toggle('cancelled', job.status === 'cancelled' || job.status === 'cancelling');
 
-    const title = job.playlist_name || (job.kind === 'track' ? 'Track' : 'Loading playlist...');
+    // Header
+    const title = job.playlist_name || (job.kind === 'track' ? 'Piste' : 'Chargement...');
     card.querySelector('.progress-title').textContent = title;
     const subParts = [job.platform_label, job.kind === 'track' ? 'Single' : 'Playlist'];
     if (job.folder_name) subParts.push(job.folder_name + '/');
     card.querySelector('.progress-subtitle').textContent = subParts.join(' · ');
 
-    const status = card.querySelector('.progress-status');
-    status.textContent = job.status;
-    status.className = 'progress-status ' + (job.status || '');
+    const statusEl = card.querySelector('.progress-status');
+    statusEl.textContent = STATUS_LABELS[job.status] || job.status;
+    statusEl.className = 'progress-status ' + (job.status || '');
 
-    // Compute overall % — for resolving phase use resolve/total, else dl-track-based
-    let overall = 0;
-    if (job.total > 0) {
-      const perTrack = 100 / job.total;
-      overall = (job.downloaded + job.failed + job.skipped) * perTrack
-              + (job.current_pct / 100) * perTrack;
-      if (overall > 100) overall = 100;
+    // ── Resolve worker (Spotify only, while resolving) ──────
+    const resolveWorker = card.querySelector('.resolve-worker');
+    const showResolve = job.platform === 'spotify' &&
+      ['resolving', 'downloading'].includes(job.status) &&
+      job.total > 0 && job.resolved < job.total;
+    resolveWorker.hidden = !showResolve;
+    if (showResolve) {
+      resolveWorker.querySelector('.worker-track-label').textContent =
+        job.resolve_current_label || '';
+      resolveWorker.querySelector('.worker-count').textContent =
+        `${job.resolved} / ${job.total}`;
+      resolveWorker.querySelector('.resolve-fill').style.width =
+        (job.resolved / job.total * 100).toFixed(1) + '%';
     }
-    if (job.status === 'done') overall = 100;
-    card.querySelector('.progress-bar-fill').style.width = overall.toFixed(1) + '%';
 
-    const current = job.current_label || '';
-    card.querySelector('.progress-current').textContent = current;
+    // ── Download worker ─────────────────────────────────────
+    const done = job.downloaded + job.failed + job.skipped;
+    const perTrack = job.total > 0 ? 100 / job.total : 0;
+    const dlPct = Math.min(done * perTrack + (job.current_pct / 100) * perTrack, 100);
+    const dlWorker = card.querySelector('.download-worker');
+    dlWorker.querySelector('.worker-track-label').textContent = job.current_label || '';
+    dlWorker.querySelector('.worker-count').textContent =
+      job.total ? `${done} / ${job.total}` : '';
+    dlWorker.querySelector('.download-fill').style.width =
+      (job.status === 'done' ? 100 : dlPct).toFixed(1) + '%';
+    dlWorker.querySelector('.worker-speed').textContent = job.current_speed || '';
+
+    // ETA (client-side, based on elapsed time since first track start)
+    const jobCache = state.jobs[job.job_id] || (state.jobs[job.job_id] = {});
+    if (job.status === 'downloading' && !jobCache.startedAt) {
+      jobCache.startedAt = Date.now() / 1000;
+    }
+    let etaText = '';
+    if (jobCache.startedAt && done > 0 && !job.done) {
+      const elapsed = Date.now() / 1000 - jobCache.startedAt;
+      if (elapsed > 2) {
+        const rate = done / elapsed;
+        const remaining = job.total - done;
+        if (rate > 0.001 && remaining > 0) etaText = formatEta(remaining / rate);
+      }
+    }
+    dlWorker.querySelector('.worker-eta').textContent = etaText;
+
+    // ── Footer ──────────────────────────────────────────────
     card.querySelector('.progress-counters').textContent = formatCounters(job);
 
-    // Toggle action buttons based on done state
-    const cancelBtn = card.querySelector('.cancel-btn');
-    const dismissBtn = card.querySelector('.dismiss-btn');
-    cancelBtn.hidden = !!job.done;
-    dismissBtn.hidden = !job.done;
+    const cancelBtn    = card.querySelector('.cancel-btn');
+    const dismissBtn   = card.querySelector('.dismiss-btn');
+    const openFolderBtn = card.querySelector('.open-folder-btn');
+    const retryBtn     = card.querySelector('.retry-btn');
+
+    cancelBtn.hidden    = !!job.done;
+    dismissBtn.hidden   = !job.done;
+    openFolderBtn.hidden = !job.done || !job.folder_path;
+    retryBtn.hidden     = !job.done || !job.failed;
+    if (job.failed) retryBtn.textContent = `↺ Relancer (${job.failed})`;
   }
+}
+
+function formatEta(sec) {
+  if (sec < 60) return '< 1 min';
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return s > 0 ? `~${m} min ${s}s` : `~${m} min`;
 }
 
 function formatCounters(job) {
   if (!job.total) return '';
   const parts = [];
-  if (job.downloaded) parts.push(`${job.downloaded} downloaded`);
-  if (job.skipped) parts.push(`${job.skipped} skipped`);
-  if (job.failed) parts.push(`${job.failed} failed`);
-  if (!parts.length) parts.push(`0 / ${job.total}`);
+  if (job.downloaded) parts.push(`${job.downloaded} téléchargé${job.downloaded > 1 ? 's' : ''}`);
+  if (job.skipped)    parts.push(`${job.skipped} ignoré${job.skipped > 1 ? 's' : ''}`);
+  if (job.failed)     parts.push(`${job.failed} échoué${job.failed > 1 ? 's' : ''}`);
+  if (!parts.length)  parts.push(`0 / ${job.total}`);
   else parts.push(`/ ${job.total}`);
-  if (job.current_speed) parts.push(job.current_speed);
   return parts.join(' · ');
 }
 

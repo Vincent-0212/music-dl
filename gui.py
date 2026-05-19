@@ -8,6 +8,7 @@ import os
 import sys
 import asyncio
 import threading
+import time
 import uuid
 from typing import Dict, List
 
@@ -111,6 +112,25 @@ class Api:
             return {"ok": True, "path": path}
         return {"ok": False}
 
+    def open_folder(self, path: str):
+        if not path or not os.path.isdir(path):
+            return {"ok": False, "error": "Dossier introuvable"}
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", path])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", path])
+        return {"ok": True}
+
+    def retry_failed(self, job_id: str):
+        orig = self._progress.get(job_id)
+        if not orig or not orig.get("failed"):
+            return {"ok": False, "error": "Pas de pistes à relancer"}
+        return self.start_downloads([orig["url"]])
+
     # --------- Detection ---------
 
     def detect_url(self, url: str):
@@ -151,16 +171,21 @@ class Api:
                 "status": "queued",
                 "playlist_name": "",
                 "folder_name": "",
+                "folder_path": "",
                 "total": 0,
                 "resolved": 0,
                 "resolved_failed": 0,
+                "resolve_current_label": "",
+                "resolve_current_idx": 0,
                 "current_idx": 0,
                 "current_label": "",
                 "current_pct": 0.0,
                 "current_speed": "",
+                "started_dl_at": None,
                 "downloaded": 0,
                 "skipped": 0,
                 "failed": 0,
+                "failed_urls": [],
                 "log": [],
                 "done": False,
                 "cancelled": False,
@@ -227,19 +252,22 @@ class Api:
             state["playlist_name"] = name
             state["total"] = total
             state["folder_name"] = folder_name
+            state["folder_path"] = os.path.join(cfg.get("output_dir", BASE_DIR), folder_name)
             state["status"] = "resolving" if platform == "spotify" and state["kind"] == "playlist" else "downloading"
             _clog(f'"{name}"  —  {total} tracks  →  {folder_name}/', "PLY")
 
         def on_resolve_progress(idx, total, label, ok):
             state["resolved"] = idx
+            state["resolve_current_label"] = label
+            state["resolve_current_idx"] = idx
             if not ok:
                 state["resolved_failed"] = state.get("resolved_failed", 0) + 1
-            state["current_label"] = label
-            tag = "RES" if ok else "RES"
             mark = "✓" if ok else "✗"
-            _clog(f"[{idx}/{total}] {mark}  {label}", tag)
+            _clog(f"[{idx}/{total}] {mark}  {label}", "RES")
 
         def on_track_start(idx, total, label):
+            if state["started_dl_at"] is None:
+                state["started_dl_at"] = time.time()
             state["status"] = "downloading"
             state["current_idx"] = idx
             state["current_label"] = label
@@ -267,6 +295,7 @@ class Api:
                 _clog(f"[{idx}] OK", " DL")
             else:
                 state["failed"] = state.get("failed", 0) + 1
+                state["failed_urls"].append(state.get("current_label", f"Track {idx}"))
                 state["log"].append({"level": "error", "msg": f"Track {idx}: {error}"})
                 _clog(f"[{idx}] ECHEC  {error}", "ERR")
             state["current_pct"] = 100.0
