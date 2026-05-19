@@ -24,6 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt -r SpotdlRip/requirements.txt pyinstaller
+          pip install -U "yt-dlp" --pre
 
       - name: Download FFmpeg (Windows)
         shell: pwsh
@@ -61,6 +62,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt -r SpotdlRip/requirements.txt pyinstaller
+          pip install -U "yt-dlp" --pre
 
       - name: Download FFmpeg (macOS)
         run: |
