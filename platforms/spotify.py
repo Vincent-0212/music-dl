@@ -193,6 +193,39 @@ def _fetch_track(sp, track_id: str) -> dict:
 
 
 # ------------------------------------------------------------
+# Direct YouTube Music search (bypasses SpotdlRip's Spotify TOTP API)
+# ------------------------------------------------------------
+
+def _search_ytmusic_direct(track: dict):
+    """Search YouTube Music using already-fetched spotipy metadata.
+
+    Calls spotdl's YouTubeMusic provider directly — no Spotify API needed,
+    no TOTP tokens, no rate limits. Returns a YouTube Music URL or None.
+    """
+    try:
+        ensure_spotdlrip_on_path()
+        from spotdl.providers.audio.ytmusic import YouTubeMusic
+        from spotdl.types.song import Song
+
+        artists = track.get("artists") or [track.get("artists_str", "Unknown")]
+        song = Song.from_missing_data(
+            name=track["title"],
+            artists=list(artists),
+            artist=artists[0],
+            album_name=track.get("album", ""),
+            duration=int(track.get("duration_ms", 0) / 1000),
+            song_id=track.get("spotify_id", ""),
+        )
+        provider = YouTubeMusic()
+        result = provider.search(song, only_verified=True)
+        if not result:
+            result = provider.search(song, only_verified=False)
+        return result
+    except Exception:
+        return None
+
+
+# ------------------------------------------------------------
 # YT Music resolution + download pipeline
 #
 # Producer/consumer pattern: as each track is resolved to a YT Music URL,
@@ -302,13 +335,19 @@ async def process(url: str, events: DownloadEvents, config: dict, sp=None) -> Pl
     resolver_sem = asyncio.Semaphore(3)
 
     async def resolve_one(track, idx):
-        """Resolve one track; falls back to YouTube search if SpotdlRip is down."""
+        """Resolve one track to a YouTube Music URL.
+
+        Priority:
+          1. SpotdlRip: Spotify TOTP → GraphQL → YouTube Music URL (best match, rate-limited)
+          2. _search_ytmusic_direct: spotdl YouTubeMusic provider w/ spotipy metadata (reliable)
+          3. ytsearch1: generic YouTube keyword search (last resort)
+        """
         async with resolver_sem:
             events.check_cancel()
             label = f"{track['artists_str']} - {track['title']}"
             yt_url = None
 
-            # Primary: SpotdlRip → YouTube Music (most accurate match)
+            # 1. SpotdlRip → YouTube Music
             if rip is not None:
                 try:
                     yt_url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=True)
@@ -319,9 +358,19 @@ async def process(url: str, events: DownloadEvents, config: dict, sp=None) -> Pl
                 except Exception as e:
                     events.log(f"SpotdlRip [{label}]: {e}", level="warn")
 
-            # Fallback: YouTube search. "auto" suffix targets the auto-generated
-            # Topic channel uploads which are official audio and less likely to have
-            # region/format restrictions than official music videos.
+            # 2. Direct YouTube Music search (bypasses Spotify TOTP API)
+            if not yt_url:
+                loop = asyncio.get_running_loop()
+                try:
+                    yt_url = await loop.run_in_executor(None, _search_ytmusic_direct, track)
+                    if yt_url:
+                        events.log(f"YTMusic direct [{label}]: {yt_url}", level="info")
+                except CancelledError:
+                    raise
+                except Exception as e:
+                    events.log(f"YTMusic direct [{label}]: {e}", level="warn")
+
+            # 3. yt-dlp YouTube keyword search (last resort)
             if not yt_url:
                 artist0 = track["artists"][0] if track.get("artists") else track.get("artists_str", "")
                 title = track["title"]
@@ -444,11 +493,13 @@ async def process_track(url: str, events: DownloadEvents, config: dict, sp=None)
         events.playlist_done(folder_name, 0, 1, 1)
         return PlaylistResult("spotify", "track", label, folder_name, singles_dir, 1, 0, 1, 0, [track])
 
-    # Resolve to YT Music via SpotdlRip, fallback to YouTube search
+    # Resolve to a YouTube URL (three-level fallback)
     ensure_spotdlrip_on_path()
     from spotdlrip import SpotdlRip
     events.check_cancel()
     yt_url = None
+
+    # 1. SpotdlRip → YouTube Music
     try:
         rip = SpotdlRip(logs=False)
         await rip.initialize()
@@ -458,9 +509,24 @@ async def process_track(url: str, events: DownloadEvents, config: dict, sp=None)
     except CancelledError:
         raise
     except Exception as _e:
-        events.log(f"SpotdlRip: {_e} — recherche YouTube utilisee.", level="warn")
+        events.log(f"SpotdlRip: {_e}", level="warn")
+
+    # 2. Direct YouTube Music search (bypasses Spotify TOTP API)
+    if not yt_url:
+        loop = asyncio.get_event_loop()
+        try:
+            yt_url = await loop.run_in_executor(None, _search_ytmusic_direct, track)
+            if yt_url:
+                events.log(f"YTMusic direct: {yt_url}", level="info")
+        except CancelledError:
+            raise
+        except Exception as _e2:
+            events.log(f"YTMusic direct: {_e2}", level="warn")
+
+    # 3. Last resort: yt-dlp keyword search
     if not yt_url:
         yt_url = f"ytsearch1:{label} auto"
+
     track["yt_url"] = yt_url
 
     events.track_start(1, 1, label)
@@ -563,6 +629,8 @@ async def process_album(url: str, events: DownloadEvents, config: dict, sp=None)
             events.check_cancel()
             label = f"{track['artists_str']} - {track['title']}"
             yt_url = None
+
+            # 1. SpotdlRip → YouTube Music
             if rip is not None:
                 try:
                     yt_url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=True)
@@ -572,8 +640,24 @@ async def process_album(url: str, events: DownloadEvents, config: dict, sp=None)
                     raise
                 except Exception as e:
                     events.log(f"SpotdlRip [{label}]: {e}", level="warn")
+
+            # 2. Direct YouTube Music search
             if not yt_url:
-                yt_url = f"ytsearch1:{label} auto"
+                loop = asyncio.get_running_loop()
+                try:
+                    yt_url = await loop.run_in_executor(None, _search_ytmusic_direct, track)
+                    if yt_url:
+                        events.log(f"YTMusic direct [{label}]: {yt_url}", level="info")
+                except CancelledError:
+                    raise
+                except Exception as e:
+                    events.log(f"YTMusic direct [{label}]: {e}", level="warn")
+
+            # 3. Last resort
+            if not yt_url:
+                artist0 = track["artists"][0] if track.get("artists") else track.get("artists_str", "")
+                yt_url = f"ytsearch1:{artist0} - {track['title']} auto"
+
             track["yt_url"] = yt_url
             events.resolve_progress(idx + 1, total_to_process, label, True)
             await queue.put(track)
