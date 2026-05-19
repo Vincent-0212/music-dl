@@ -21,7 +21,7 @@ binaries = []
 hiddenimports = []
 
 # collect_all = data files + binaries + hidden imports for each package
-for pkg in ('spotdl', 'ytmusicapi', 'yt_dlp', 'certifi', 'spotipy'):
+for pkg in ('spotdl', 'ytmusicapi', 'yt_dlp', 'certifi', 'spotipy', 'tls_client', 'spotipyfree'):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -46,6 +46,7 @@ hiddenimports += [
     'webview.platforms.edgechromium',
     'clr',
     # spotdl audio/lyrics providers (loaded lazily by spotdl)
+    'tls_client', 'spotipyfree',
     'spotdl.providers.audio.youtube',
     'spotdl.providers.audio.ytmusic',
     'spotdl.providers.audio.soundcloud',
