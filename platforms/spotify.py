@@ -282,38 +282,49 @@ async def process(url: str, events: DownloadEvents, config: dict, sp=None) -> Pl
     queue: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_BUFFER)
     counters = {"downloaded": 0, "failed": 0, "resolve_failed": 0, "dl_index": 0}
 
-    # Initialize SpotdlRip once, shared by all resolver coroutines
+    # Initialize SpotdlRip once, shared by all resolver coroutines.
+    # If Spotify rotated its TOTP key (happens periodically), initialization
+    # fails gracefully and we fall back to yt-dlp YouTube search per track.
     ensure_spotdlrip_on_path()
     from spotdlrip import SpotdlRip
-    rip = SpotdlRip(logs=False)
-    await rip.initialize()
+    rip = None
+    try:
+        _rip = SpotdlRip(logs=False)
+        await _rip.initialize()
+        rip = _rip
+    except Exception as _init_err:
+        events.log(
+            f"SpotdlRip indisponible ({_init_err}) — recherche YouTube activee en fallback.",
+            level="warn",
+        )
 
     resolver_sem = asyncio.Semaphore(3)
 
     async def resolve_one(track, idx):
-        """Resolve one track and push it to the download queue if successful."""
+        """Resolve one track; falls back to YouTube search if SpotdlRip is down."""
         async with resolver_sem:
             events.check_cancel()
             label = f"{track['artists_str']} - {track['title']}"
-            try:
-                url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=True)
-                if not url:
-                    url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=False)
-                track["yt_url"] = url
-                if url:
-                    events.resolve_progress(idx + 1, total_to_process, label, True)
-                    await queue.put(track)
-                else:
-                    log_failure(folder_path, track, "Aucune correspondance YouTube Music")
-                    events.resolve_progress(idx + 1, total_to_process, label, False)
-                    counters["resolve_failed"] += 1
-            except CancelledError:
-                raise
-            except Exception as e:
-                track["yt_url"] = None
-                log_failure(folder_path, track, f"Erreur SpotdlRip: {e}")
-                events.resolve_progress(idx + 1, total_to_process, label, False)
-                counters["resolve_failed"] += 1
+            yt_url = None
+
+            # Primary: SpotdlRip → YouTube Music (most accurate match)
+            if rip is not None:
+                try:
+                    yt_url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=True)
+                    if not yt_url:
+                        yt_url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=False)
+                except CancelledError:
+                    raise
+                except Exception as e:
+                    events.log(f"SpotdlRip [{label}]: {e}", level="warn")
+
+            # Fallback: yt-dlp YouTube search (always works)
+            if not yt_url:
+                yt_url = f"ytsearch1:{label}"
+
+            track["yt_url"] = yt_url
+            events.resolve_progress(idx + 1, total_to_process, label, True)
+            await queue.put(track)
 
     async def producer():
         """Run all resolutions concurrently, then push N sentinels to stop workers."""
@@ -428,23 +439,24 @@ async def process_track(url: str, events: DownloadEvents, config: dict, sp=None)
         events.playlist_done(folder_name, 0, 1, 1)
         return PlaylistResult("spotify", "track", label, folder_name, singles_dir, 1, 0, 1, 0, [track])
 
-    # Resolve to YT Music
+    # Resolve to YT Music via SpotdlRip, fallback to YouTube search
     ensure_spotdlrip_on_path()
     from spotdlrip import SpotdlRip
-    rip = SpotdlRip(logs=False)
-    await rip.initialize()
     events.check_cancel()
-    yt_url = await rip.spotify_to_ytmusic(track_id=track_id, only_verified=True)
+    yt_url = None
+    try:
+        rip = SpotdlRip(logs=False)
+        await rip.initialize()
+        yt_url = await rip.spotify_to_ytmusic(track_id=track_id, only_verified=True)
+        if not yt_url:
+            yt_url = await rip.spotify_to_ytmusic(track_id=track_id, only_verified=False)
+    except CancelledError:
+        raise
+    except Exception as _e:
+        events.log(f"SpotdlRip: {_e} — recherche YouTube utilisee.", level="warn")
     if not yt_url:
-        yt_url = await rip.spotify_to_ytmusic(track_id=track_id, only_verified=False)
+        yt_url = f"ytsearch1:{label}"
     track["yt_url"] = yt_url
-
-    if not yt_url:
-        log_failure(singles_dir, track, "Aucune correspondance YouTube Music")
-        events.track_start(1, 1, label)
-        events.track_done(1, False, "Aucune correspondance YouTube Music")
-        events.playlist_done(folder_name, 0, 1, 0)
-        return PlaylistResult("spotify", "track", label, folder_name, singles_dir, 1, 0, 0, 1, [track])
 
     events.track_start(1, 1, label)
     try:
@@ -528,8 +540,16 @@ async def process_album(url: str, events: DownloadEvents, config: dict, sp=None)
 
     ensure_spotdlrip_on_path()
     from spotdlrip import SpotdlRip
-    rip = SpotdlRip(logs=False)
-    await rip.initialize()
+    rip = None
+    try:
+        _rip = SpotdlRip(logs=False)
+        await _rip.initialize()
+        rip = _rip
+    except Exception as _init_err:
+        events.log(
+            f"SpotdlRip indisponible ({_init_err}) — recherche YouTube activee en fallback.",
+            level="warn",
+        )
 
     resolver_sem = asyncio.Semaphore(3)
 
@@ -537,25 +557,21 @@ async def process_album(url: str, events: DownloadEvents, config: dict, sp=None)
         async with resolver_sem:
             events.check_cancel()
             label = f"{track['artists_str']} - {track['title']}"
-            try:
-                yt_url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=True)
-                if not yt_url:
-                    yt_url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=False)
-                track["yt_url"] = yt_url
-                if yt_url:
-                    events.resolve_progress(idx + 1, total_to_process, label, True)
-                    await queue.put(track)
-                else:
-                    log_failure(folder_path, track, "Aucune correspondance YouTube Music")
-                    events.resolve_progress(idx + 1, total_to_process, label, False)
-                    counters["resolve_failed"] += 1
-            except CancelledError:
-                raise
-            except Exception as e:
-                track["yt_url"] = None
-                log_failure(folder_path, track, f"Erreur SpotdlRip: {e}")
-                events.resolve_progress(idx + 1, total_to_process, label, False)
-                counters["resolve_failed"] += 1
+            yt_url = None
+            if rip is not None:
+                try:
+                    yt_url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=True)
+                    if not yt_url:
+                        yt_url = await rip.spotify_to_ytmusic(track_id=track["spotify_id"], only_verified=False)
+                except CancelledError:
+                    raise
+                except Exception as e:
+                    events.log(f"SpotdlRip [{label}]: {e}", level="warn")
+            if not yt_url:
+                yt_url = f"ytsearch1:{label}"
+            track["yt_url"] = yt_url
+            events.resolve_progress(idx + 1, total_to_process, label, True)
+            await queue.put(track)
 
     async def producer():
         try:
