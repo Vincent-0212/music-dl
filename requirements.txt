@@ -1,6 +1,9 @@
 pywebview>=4.4
 spotipy>=2.23
-yt-dlp>=2024.1.1
+# yt-dlp >= 2026.05.16 required — earlier versions fail on YouTube (no JS runtime).
+# The stable PyPI release may lag; install the latest with:
+#   pip install -U yt-dlp --pre
+yt-dlp>=2026.5.16.232000
 mutagen
 # SpotdlRip dependencies (see SpotdlRip/requirements.txt for full list)
 # Install both: pip install -r requirements.txt -r SpotdlRip/requirements.txt

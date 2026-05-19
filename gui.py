@@ -93,6 +93,11 @@ class Api:
         save_config(cfg)
         return {"ok": True}
 
+    def open_url(self, url: str):
+        import webbrowser
+        webbrowser.open(url)
+        return {"ok": True}
+
     def pick_folder(self):
         try:
             result = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)
@@ -202,18 +207,37 @@ class Api:
         state = self._progress[job_id]
         cancel_ev = self._cancel_events[job_id]
         state["status"] = "running"
+        platform = state.get("platform", "?")
+        kind = state.get("kind", "?")
+
+        _LOG_SEP = "─" * 56
+
+        def _clog(msg, tag="   "):
+            """Print to console with a consistent prefix."""
+            try:
+                print(f"  [{tag}] {msg}", flush=True)
+            except Exception:
+                pass
+
+        print(f"\n  {_LOG_SEP}", flush=True)
+        _clog(f"Job {job_id}  |  {platform.upper()} {kind}  |  {url[:72]}", "JOB")
+        print(f"  {_LOG_SEP}", flush=True)
 
         def on_playlist_start(platform, name, total, folder_name):
             state["playlist_name"] = name
             state["total"] = total
             state["folder_name"] = folder_name
             state["status"] = "resolving" if platform == "spotify" and state["kind"] == "playlist" else "downloading"
+            _clog(f'"{name}"  —  {total} tracks  →  {folder_name}/', "PLY")
 
         def on_resolve_progress(idx, total, label, ok):
             state["resolved"] = idx
             if not ok:
                 state["resolved_failed"] = state.get("resolved_failed", 0) + 1
             state["current_label"] = label
+            tag = "RES" if ok else "RES"
+            mark = "✓" if ok else "✗"
+            _clog(f"[{idx}/{total}] {mark}  {label}", tag)
 
         def on_track_start(idx, total, label):
             state["status"] = "downloading"
@@ -221,18 +245,30 @@ class Api:
             state["current_label"] = label
             state["current_pct"] = 0.0
             state["current_speed"] = ""
+            _clog(f"[{idx}/{total}] Debut  {label}", " DL")
 
         def on_track_progress(idx, pct, speed):
             state["current_idx"] = idx
             state["current_pct"] = pct
             state["current_speed"] = speed
+            # Throttle: print only at 25 / 50 / 75 / 100 %
+            for milestone in (25, 50, 75, 100):
+                prev = getattr(on_track_progress, "_last_pct", 0)
+                if prev < milestone <= pct:
+                    on_track_progress._last_pct = pct
+                    _clog(f"[{idx}] {pct:5.1f}%  {speed}", " DL")
+                    break
+            else:
+                on_track_progress._last_pct = pct
 
         def on_track_done(idx, success, error):
             if success:
                 state["downloaded"] = state.get("downloaded", 0) + 1
+                _clog(f"[{idx}] OK", " DL")
             else:
                 state["failed"] = state.get("failed", 0) + 1
                 state["log"].append({"level": "error", "msg": f"Track {idx}: {error}"})
+                _clog(f"[{idx}] ECHEC  {error}", "ERR")
             state["current_pct"] = 100.0
             state["current_speed"] = ""
 
@@ -242,9 +278,13 @@ class Api:
             state["skipped"] = skipped
             state["status"] = "done"
             state["done"] = True
+            _clog(f"Termine  {downloaded} dl  {skipped} skips  {state.get('failed',0)} erreurs  /  {total} tracks", "END")
+            print(f"  {_LOG_SEP}\n", flush=True)
 
         def on_log(msg, level):
             state["log"].append({"level": level, "msg": msg})
+            tag = {"error": "ERR", "warn": "WRN"}.get(level, "INF")
+            _clog(msg, tag)
 
         events = DownloadEvents(
             on_playlist_start=on_playlist_start,
@@ -262,31 +302,45 @@ class Api:
             with self._spotify_lock:
                 if self._spotify_client is None:
                     try:
+                        _clog("OAuth Spotify — ouverture du navigateur...", "SPO")
                         state["log"].append({"level": "info", "msg": "Connexion Spotify..."})
                         spo = cfg.get("spotify", {})
                         self._spotify_client = build_spotify_client(spo["client_id"], spo["client_secret"])
+                        _clog("Connexion Spotify OK", "SPO")
                     except Exception as e:
                         state["error_message"] = f"OAuth Spotify a echoue: {e}"
                         state["log"].append({"level": "error", "msg": state["error_message"]})
                         state["status"] = "error"
                         state["done"] = True
+                        _clog(state["error_message"], "ERR")
                         return
                 sp = self._spotify_client
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(process_url(url, events, cfg, spotify_client=sp))
+            result = loop.run_until_complete(process_url(url, events, cfg, spotify_client=sp))
+            if result is None and not state.get("done"):
+                msg = "Aucune information recuperee (URL invalide ou inaccessible)."
+                state["status"] = "error"
+                state["error_message"] = state.get("error_message") or msg
+                state["done"] = True
+                _clog(state["error_message"], "ERR")
         except CancelledError:
             state["cancelled"] = True
             state["status"] = "cancelled"
             state["done"] = True
             state["log"].append({"level": "warn", "msg": "Cancelled by user."})
+            _clog("Job annule par l'utilisateur.", "WRN")
+            print(f"  {_LOG_SEP}\n", flush=True)
         except Exception as e:
             state["error_message"] = str(e)
             state["log"].append({"level": "error", "msg": f"Exception: {e}"})
             state["status"] = "error"
             state["done"] = True
+            _clog(f"Exception non geree: {e}", "ERR")
+            import traceback; traceback.print_exc()
+            print(f"  {_LOG_SEP}\n", flush=True)
         finally:
             try:
                 loop.close()

@@ -18,22 +18,25 @@ def detect_platform(url: str):
 
 
 def detect_kind(url: str):
-    """Return 'track' or 'playlist' (best guess from URL)."""
+    """Return 'track', 'playlist', or 'album' (best guess from URL)."""
     if not url:
         return None
     u = url.lower().strip()
-    # Spotify
-    if "spotify.com/playlist/" in u or u.startswith("spotify:playlist:"):
-        return "playlist"
-    if "spotify.com/track/" in u or u.startswith("spotify:track:"):
-        return "track"
-    if "spotify.com/album/" in u:
-        return "playlist"  # treat album as a "playlist"
+    # Spotify — handle locale-prefixed URLs like /intl-fr/track/, /intl-en/album/
+    if "spotify.com" in u:
+        if "/playlist/" in u or u.startswith("spotify:playlist:"):
+            return "playlist"
+        if "/track/" in u or u.startswith("spotify:track:"):
+            return "track"
+        if "/album/" in u or u.startswith("spotify:album:"):
+            return "album"
     # YouTube
     if "youtube.com/playlist" in u or ("list=" in u and "watch?" not in u):
         return "playlist"
     if "youtu.be/" in u or "watch?v=" in u or "music.youtube.com/watch" in u:
         return "track"
+    if "music.youtube.com/browse/" in u:
+        return "album"
     if "youtube.com" in u and "list=" in u:
         return "playlist"
     # SoundCloud: /sets/ is a playlist, otherwise probably a track
@@ -60,6 +63,8 @@ async def process_url(url: str, events: DownloadEvents, config: dict, spotify_cl
         from . import spotify
         if kind == "track":
             return await spotify.process_track(url, events, config, spotify_client)
+        if kind == "album":
+            return await spotify.process_album(url, events, config, spotify_client)
         return await spotify.process(url, events, config, spotify_client)
     if platform == "soundcloud":
         from . import soundcloud
