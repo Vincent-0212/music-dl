@@ -1,0 +1,9 @@
+{
+  "spotify": {
+    "client_id": "YOUR_SPOTIFY_CLIENT_ID",
+    "client_secret": "YOUR_SPOTIFY_CLIENT_SECRET"
+  },
+  "output_dir": "C:/Users/YOU/Desktop/DL_MUSIC",
+  "audio_quality": "320",
+  "music_updater": true
+}

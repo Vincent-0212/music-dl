@@ -1,0 +1,51 @@
+# ============================================================
+# SECURITY — never commit credentials or tokens
+# ============================================================
+config.json
+.cache
+
+# ============================================================
+# Downloaded music (local content, not part of the project)
+# ============================================================
+SINGLES/
+# Playlist folders are any folder that isn't a known source folder.
+# The safest rule: ignore everything that isn't explicitly tracked.
+# Add playlist folders here as needed, or rely on the wildcard below.
+# Example auto-generated playlist folders:
+# My Playlist/
+# VARIATION/
+
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.spec
+.venv/
+venv/
+env/
+
+# ============================================================
+# PyInstaller output
+# ============================================================
+dist/
+build/
+
+# ============================================================
+# Logs / temp
+# ============================================================
+*.log
+failed_tracks.json
+playlist_meta.json
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini

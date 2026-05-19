@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MUSIC DL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <h1 class="brand-title">MUSIC<span class="brand-accent">DL</span></h1>
+        <p class="brand-sub">Bulk playlist &amp; single-track downloader</p>
+      </div>
+      <button class="icon-btn" id="open-settings" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Missing Spotify credentials banner -->
+    <div class="banner" id="spotify-banner" hidden>
+      <div class="banner-content">
+        <svg class="banner-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>
+        </svg>
+        <span><strong>Missing Spotify credentials.</strong> Spotify links will be ignored until you configure them.</span>
+      </div>
+      <button class="banner-action" id="banner-open-settings">Open Settings</button>
+    </div>
+
+    <!-- Platform indicators -->
+    <section class="platforms">
+      <div class="section-label">Supported platforms</div>
+      <div class="platform-grid">
+        <div class="platform-card" data-platform="spotify">
+          <div class="platform-dot"></div>
+          <div class="platform-name">Spotify</div>
+          <div class="platform-hint" id="spotify-hint">Playlists &amp; tracks</div>
+        </div>
+        <div class="platform-card active" data-platform="soundcloud">
+          <div class="platform-dot"></div>
+          <div class="platform-name">SoundCloud</div>
+          <div class="platform-hint">Playlists &amp; tracks</div>
+        </div>
+        <div class="platform-card active" data-platform="youtube">
+          <div class="platform-dot"></div>
+          <div class="platform-name">YouTube</div>
+          <div class="platform-hint">Including YT Music</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Playlists / tracks -->
+    <section class="playlists">
+      <div class="section-head">
+        <div class="section-label">Links</div>
+        <label class="switch-row" title="When ON, existing playlists are updated (only new tracks downloaded)">
+          <span class="switch-label">Music updater</span>
+          <span class="switch">
+            <input type="checkbox" id="music-updater" checked />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </span>
+        </label>
+      </div>
+      <div class="playlist-list" id="playlist-list">
+        <!-- rows injected by JS -->
+      </div>
+    </section>
+
+    <!-- Action bar -->
+    <footer class="action-bar">
+      <div class="action-meta" id="action-meta">Paste a URL to begin</div>
+      <div class="action-buttons">
+        <button class="ghost-btn" id="reset-btn" hidden>Clear all</button>
+        <button class="primary-btn" id="start-btn" disabled>
+          <span>Start downloads</span>
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M13 6l6 6-6 6"/>
+          </svg>
+        </button>
+      </div>
+    </footer>
+
+    <!-- Progress panel -->
+    <section class="progress-panel" id="progress-panel" hidden>
+      <div class="section-head">
+        <div class="section-label">Activity</div>
+        <button class="ghost-btn small" id="clear-done-btn" hidden>Clear completed</button>
+      </div>
+      <div class="progress-list" id="progress-list"></div>
+    </section>
+
+  </main>
+
+  <!-- Settings modal -->
+  <div class="modal" id="settings-modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 class="modal-title">Settings</h2>
+        <button class="icon-btn small" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="field-group">
+          <div class="field-title">Spotify credentials</div>
+          <p class="field-hint">
+            Create an app at <span class="mono">developer.spotify.com/dashboard</span>,
+            set the redirect URI to <span class="mono">http://127.0.0.1:8888/callback</span>,
+            then paste your Client ID and Secret here.
+          </p>
+          <label class="field">
+            <span class="field-label">Client ID</span>
+            <input type="text" id="spotify-id" autocomplete="off" spellcheck="false" />
+          </label>
+          <label class="field">
+            <span class="field-label">Client Secret</span>
+            <div class="field-with-toggle">
+              <input type="password" id="spotify-secret" autocomplete="off" spellcheck="false" />
+              <button type="button" class="toggle-reveal" id="toggle-secret" aria-label="Show secret">
+                <svg class="eye-show" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg class="eye-hide" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" hidden>
+                  <path d="M17.94 17.94A10.5 10.5 0 0112 19c-7 0-11-7-11-7a18.4 18.4 0 015.06-5.94M9.9 4.24A10.7 10.7 0 0112 4c7 0 11 7 11 7a18.7 18.7 0 01-2.16 3.19M14.12 14.12A3 3 0 119.88 9.88M1 1l22 22"/>
+                </svg>
+              </button>
+            </div>
+          </label>
+          <div class="field-actions">
+            <button class="ghost-btn" id="clear-spotify">Clear</button>
+            <button class="primary-btn" id="save-spotify">Save</button>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <div class="field-title">Downloads</div>
+          <label class="field">
+            <span class="field-label">Output folder</span>
+            <div class="field-row">
+              <input type="text" id="output-dir" readonly />
+              <button class="ghost-btn" id="pick-folder">Browse</button>
+            </div>
+          </label>
+          <label class="field">
+            <span class="field-label">Audio quality</span>
+            <select id="audio-quality">
+              <option value="128">128 kbps</option>
+              <option value="192">192 kbps</option>
+              <option value="256">256 kbps</option>
+              <option value="320" selected>320 kbps</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

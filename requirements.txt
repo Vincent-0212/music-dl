@@ -1,0 +1,6 @@
+pywebview>=4.4
+spotipy>=2.23
+yt-dlp>=2024.1.1
+mutagen
+# SpotdlRip dependencies (see SpotdlRip/requirements.txt for full list)
+# Install both: pip install -r requirements.txt -r SpotdlRip/requirements.txt
