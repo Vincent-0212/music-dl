@@ -2,42 +2,63 @@
 """PyInstaller spec — macOS — MUSIC DL"""
 
 import os
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 block_cipher = None
 
-# ─── Data files ───────────────────────────────────────────────────────────────
+# ─── FFmpeg binary — FAIL FAST if missing ────────────────────────────────────
+if not os.path.exists('ffmpeg'):
+    raise SystemExit(
+        "ERROR: ffmpeg not found in project root.\n"
+        "The CI must download it before running PyInstaller."
+    )
+
+# ─── Data / binary / hiddenimport collection ──────────────────────────────────
 datas = []
+binaries = []
+hiddenimports = []
+
+for pkg in (
+    'spotdl', 'ytmusicapi', 'yt_dlp', 'certifi', 'spotipy', 'tls_client',
+    'pykakasi', 'syncedlyrics', 'soundcloud_v2',
+):
+    d, b, h = collect_all(pkg)
+    datas += d
+    binaries += b
+    hiddenimports += h
+
 datas += collect_data_files('webview', subdir='js')
-datas += collect_data_files('spotdl')
-datas += collect_data_files('ytmusicapi')
+datas += collect_data_files('webview', subdir='lib')
 datas += [('frontend', 'frontend')]
 datas += [('SpotdlRip/spotdlrip.py', 'SpotdlRip')]
 datas += [('platforms', 'platforms')]
 
-# ─── FFmpeg binary (downloaded by CI to project root before build) ─────────────
-binaries = []
-if os.path.exists('ffmpeg'):
-    binaries.append(('ffmpeg', '.'))
+binaries.append(('ffmpeg', '.'))
 
-# ─── Hidden imports ────────────────────────────────────────────────────────────
-hiddenimports = [
+# ─── Hidden imports ───────────────────────────────────────────────────────────
+hiddenimports += [
     'webview.platforms.cocoa',
     'objc',
     'Foundation', 'AppKit', 'WebKit',
-    'spotipy', 'spotipy.oauth2',
-    'spotdl.providers.audio.ytmusic', 'spotdl.types.song',
-    'ytmusicapi',
-    'aiohttp', 'aiohttp.resolver', 'aiohttp.connector',
-    'pyotp',
+    'tls_client',
+    'spotdl.providers.audio.youtube',
+    'spotdl.providers.audio.ytmusic',
+    'spotdl.providers.audio.soundcloud',
+    'spotdl.providers.audio.bandcamp',
+    'spotdl.providers.audio.piped',
+    'spotdl.providers.lyrics.genius',
+    'spotdl.providers.lyrics.azlyrics',
+    'spotdl.providers.lyrics.musixmatch',
+    'spotdl.providers.lyrics.synced',
     'yt_dlp', 'yt_dlp.postprocessor',
     'mutagen', 'mutagen.id3', 'mutagen.mp3',
+    'aiohttp', 'aiohttp.resolver', 'aiohttp.connector',
     'certifi', 'charset_normalizer', 'urllib3',
+    'pyotp',
+    '_ssl', '_hashlib', '_socket',
 ]
-hiddenimports += collect_submodules('yt_dlp')
-hiddenimports += collect_submodules('spotdl')
 
-# ─── Analysis ─────────────────────────────────────────────────────────────────
+# ─── Analysis ────────────────────────────────────────────────────────────────
 a = Analysis(
     ['gui.py'],
     pathex=['.', 'SpotdlRip'],
@@ -63,16 +84,15 @@ exe = EXE(
     name='MUSIC DL',
     debug=False,
     strip=False,
-    upx=False,          # UPX not recommended on macOS
+    upx=False,
     console=False,
     # icon='frontend/icon.icns',
 )
 
-# macOS .app bundle
 app = BUNDLE(
     exe,
     name='MUSIC DL.app',
-    icon=None,          # replace with 'frontend/icon.icns' if you add one
+    icon=None,
     bundle_identifier='com.vincentd.musicdl',
     info_plist={
         'NSHighResolutionCapable': True,

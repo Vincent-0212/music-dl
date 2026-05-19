@@ -10,10 +10,33 @@ const state = {
   rows: [],            // [{id, url, platform, kind, el}]
   config: null,
   progressPollId: null,
-  jobs: {},            // job_id -> state cache for diff rendering
 };
 
+const notifiedJobs = new Set();
+
 let rowSeq = 0;
+
+const STRINGS = {
+  status: {
+    queued: 'Queued', running: 'Starting', resolving: 'Resolving',
+    downloading: 'Downloading', done: 'Done', error: 'Error',
+    cancelled: 'Cancelled', cancelling: 'Cancelling…',
+  },
+  worker: {
+    resolve_tag: 'Resolving',
+    download_tag: '↓ Downloading',
+    all_resolved: 'All tracks resolved',
+  },
+  card: {
+    cancel: 'Cancel', dismiss: 'Close',
+    open_folder: 'Open folder',
+    retry: (n) => `↺ Retry (${n})`,
+    loading: 'Loading…', track: 'Track',
+  },
+  notification: {
+    body: (name, n) => `${name} — ${n} track${n !== 1 ? 's' : ''} downloaded`,
+  },
+};
 
 // ---------------------------------------------------------
 // Bootstrap
@@ -26,11 +49,16 @@ async function init() {
   if (state._inited) return;
   state._inited = true;
 
+  applyTheme();
   bindEvents();
   await loadConfig();
   addRow();
   updateActionBar();
   applySpotifyState();
+
+  if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
 }
 
 async function loadConfig() {
@@ -61,7 +89,27 @@ function applySpotifyState() {
 // Event binding
 // ---------------------------------------------------------
 
+function applyTheme() {
+  const saved = localStorage.getItem('music-dl-theme') || '';
+  document.documentElement.dataset.theme = saved;
+  updateThemeIcon(saved === 'dark');
+}
+
+function toggleTheme() {
+  const isDark = document.documentElement.dataset.theme === 'dark';
+  const next = isDark ? '' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('music-dl-theme', next);
+  updateThemeIcon(!isDark);
+}
+
+function updateThemeIcon(dark) {
+  $('#icon-moon').hidden = dark;
+  $('#icon-sun').hidden = !dark;
+}
+
 function bindEvents() {
+  $('#theme-toggle').addEventListener('click', toggleTheme);
   $('#open-settings').addEventListener('click', openSettings);
   $('#banner-open-settings').addEventListener('click', openSettings);
   $$('#settings-modal [data-close]').forEach(el => el.addEventListener('click', closeSettings));
@@ -71,6 +119,7 @@ function bindEvents() {
   $('#audio-quality').addEventListener('change', saveAudioQuality);
   $('#toggle-secret').addEventListener('click', toggleSecretReveal);
   $('#music-updater').addEventListener('change', saveMusicUpdater);
+  $('#open-logs').addEventListener('click', () => api().open_log_folder().catch(() => {}));
   $('#start-btn').addEventListener('click', startDownloads);
   $('#reset-btn').addEventListener('click', resetAllRows);
   $('#clear-done-btn').addEventListener('click', clearCompletedJobs);
@@ -348,15 +397,24 @@ async function pollProgress() {
 function renderProgress(jobs) {
   const list = $('#progress-list');
 
-  // Remove cards whose jobs no longer exist (dismissed)
+  // Remove dismissed cards
   const validIds = new Set(jobs.map(j => j.job_id));
   for (const card of Array.from(list.children)) {
-    if (!validIds.has(card.dataset.jobId)) {
-      card.remove();
-    }
+    if (!validIds.has(card.dataset.jobId)) card.remove();
   }
 
   for (const job of jobs) {
+    // Desktop notification on first done
+    if (job.done && !notifiedJobs.has(job.job_id)) {
+      notifiedJobs.add(job.job_id);
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        new Notification('MUSIC DL', {
+          body: STRINGS.notification.body(job.playlist_name || 'Download', job.downloaded),
+          icon: 'logo.png',
+        });
+      }
+    }
+
     let card = list.querySelector(`[data-job-id="${job.job_id}"]`);
     if (!card) {
       card = document.createElement('div');
@@ -370,77 +428,134 @@ function renderProgress(jobs) {
           </div>
           <div class="progress-head-actions">
             <div class="progress-status"></div>
-            <button class="progress-card-btn cancel-btn danger" title="Cancel" type="button">
+            <button class="progress-card-btn cancel-btn danger" title="${STRINGS.card.cancel}" type="button">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8">
                 <rect x="6" y="6" width="12" height="12" rx="1"/>
               </svg>
             </button>
-            <button class="progress-card-btn dismiss-btn" title="Dismiss" type="button" hidden>
+            <button class="progress-card-btn dismiss-btn" title="${STRINGS.card.dismiss}" type="button" hidden>
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
             </button>
           </div>
         </div>
-        <div class="progress-bar"><div class="progress-bar-fill"></div></div>
-        <div class="progress-meta">
-          <div class="progress-current"></div>
+        <div class="worker-row resolve-worker" hidden>
+          <div class="worker-label-row">
+            <span class="worker-tag">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0"><circle cx="10" cy="10" r="6"/><path d="M20 20l-4.35-4.35"/></svg>
+              ${STRINGS.worker.resolve_tag}
+            </span>
+            <span class="worker-track-label"></span>
+            <span class="worker-count"></span>
+          </div>
+          <div class="worker-bar"><div class="worker-bar-fill resolve-fill"></div></div>
+        </div>
+        <div class="worker-row download-worker">
+          <div class="worker-label-row">
+            <span class="worker-tag">${STRINGS.worker.download_tag}</span>
+            <span class="worker-track-label"></span>
+            <span class="worker-count"></span>
+          </div>
+          <div class="worker-bar"><div class="worker-bar-fill download-fill"></div></div>
+        </div>
+        <div class="progress-error" hidden></div>
+        <div class="progress-footer">
           <div class="progress-counters"></div>
+          <div class="progress-footer-actions">
+            <button class="ghost-btn small open-folder-btn" type="button" hidden>${STRINGS.card.open_folder}</button>
+            <button class="ghost-btn small warn retry-btn" type="button" hidden></button>
+          </div>
         </div>
       `;
       card.querySelector('.cancel-btn').addEventListener('click', () => cancelJob(job.job_id));
       card.querySelector('.dismiss-btn').addEventListener('click', () => dismissJob(job.job_id));
+      card.querySelector('.open-folder-btn').addEventListener('click', () => {
+        const path = card.dataset.folderPath;
+        if (path) api().open_folder(path).catch(() => {});
+      });
+      card.querySelector('.retry-btn').addEventListener('click', async () => {
+        const res = await api().retry_failed(card.dataset.jobId).catch(() => null);
+        if (res && res.ok) startProgressPolling();
+      });
       list.appendChild(card);
     }
 
-    // Update card content
+    // Persist folder path for open-folder button
+    if (job.folder_path) card.dataset.folderPath = job.folder_path;
+
+    // State classes
     card.classList.toggle('done', job.status === 'done');
     card.classList.toggle('error', job.status === 'error');
     card.classList.toggle('cancelled', job.status === 'cancelled' || job.status === 'cancelling');
 
-    const title = job.playlist_name || (job.kind === 'track' ? 'Track' : 'Loading playlist...');
+    // Header
+    const title = job.playlist_name || (job.kind === 'track' ? STRINGS.card.track : STRINGS.card.loading);
     card.querySelector('.progress-title').textContent = title;
-    const subParts = [job.platform_label, job.kind === 'track' ? 'Single' : 'Playlist'];
-    if (job.folder_name) subParts.push(job.folder_name + '/');
-    card.querySelector('.progress-subtitle').textContent = subParts.join(' · ');
+    const kindLabel = { track: 'Track', album: 'Album', playlist: 'Playlist' }[job.kind] || 'Playlist';
+    card.querySelector('.progress-subtitle').textContent = [job.platform_label, kindLabel].join(' · ');
 
-    const status = card.querySelector('.progress-status');
-    status.textContent = job.status;
-    status.className = 'progress-status ' + (job.status || '');
+    const statusEl = card.querySelector('.progress-status');
+    statusEl.textContent = STRINGS.status[job.status] || job.status;
+    statusEl.className = 'progress-status ' + (job.status || '');
 
-    // Compute overall % — for resolving phase use resolve/total, else dl-track-based
-    let overall = 0;
-    if (job.total > 0) {
-      const perTrack = 100 / job.total;
-      overall = (job.downloaded + job.failed + job.skipped) * perTrack
-              + (job.current_pct / 100) * perTrack;
-      if (overall > 100) overall = 100;
+    // ── Resolve worker (Spotify only) ──────────────────────
+    const resolveWorker = card.querySelector('.resolve-worker');
+    const showResolve = job.platform === 'spotify' && job.total > 0 &&
+      ['resolving', 'downloading', 'done'].includes(job.status);
+    resolveWorker.hidden = !showResolve;
+    if (showResolve) {
+      const allResolved = job.resolved >= job.total;
+      resolveWorker.querySelector('.worker-track-label').textContent =
+        allResolved ? STRINGS.worker.all_resolved : (job.resolve_current_label || '');
+      resolveWorker.querySelector('.worker-count').textContent =
+        `${job.resolved} / ${job.total}`;
+      resolveWorker.querySelector('.resolve-fill').style.width =
+        (job.resolved / job.total * 100).toFixed(1) + '%';
+      resolveWorker.querySelector('.resolve-fill').classList.toggle('resolve-done', allResolved);
     }
-    if (job.status === 'done') overall = 100;
-    card.querySelector('.progress-bar-fill').style.width = overall.toFixed(1) + '%';
 
-    const current = job.current_label || '';
-    card.querySelector('.progress-current').textContent = current;
+    // ── Download worker ─────────────────────────────────────
+    const done = job.downloaded + job.failed + job.skipped;
+    const dlPct = job.total > 0 ? Math.min(done / job.total * 100, 100) : 0;
+    const dlWorker = card.querySelector('.download-worker');
+    dlWorker.querySelector('.worker-track-label').textContent = job.current_label || '';
+    dlWorker.querySelector('.worker-count').textContent =
+      job.total ? `${done} / ${job.total}` : '';
+    dlWorker.querySelector('.download-fill').style.width =
+      (job.status === 'done' ? 100 : dlPct).toFixed(1) + '%';
+
+    // ── Footer ──────────────────────────────────────────────
     card.querySelector('.progress-counters').textContent = formatCounters(job);
 
-    // Toggle action buttons based on done state
-    const cancelBtn = card.querySelector('.cancel-btn');
-    const dismissBtn = card.querySelector('.dismiss-btn');
-    cancelBtn.hidden = !!job.done;
-    dismissBtn.hidden = !job.done;
+    // ── Error message ────────────────────────────────────────
+    const errEl = card.querySelector('.progress-error');
+    if (job.error_message) {
+      errEl.textContent = job.error_message;
+      errEl.hidden = false;
+    } else {
+      errEl.hidden = true;
+    }
+
+    const cancelBtn    = card.querySelector('.cancel-btn');
+    const dismissBtn   = card.querySelector('.dismiss-btn');
+    const openFolderBtn = card.querySelector('.open-folder-btn');
+    const retryBtn     = card.querySelector('.retry-btn');
+
+    cancelBtn.hidden    = !!job.done;
+    dismissBtn.hidden   = !job.done;
+    openFolderBtn.hidden = !job.done || !job.folder_path;
+    retryBtn.hidden     = !job.done || !job.failed;
+    if (job.failed) retryBtn.textContent = STRINGS.card.retry(job.failed);
   }
 }
 
 function formatCounters(job) {
   if (!job.total) return '';
-  const parts = [];
-  if (job.downloaded) parts.push(`${job.downloaded} downloaded`);
-  if (job.skipped) parts.push(`${job.skipped} skipped`);
-  if (job.failed) parts.push(`${job.failed} failed`);
-  if (!parts.length) parts.push(`0 / ${job.total}`);
-  else parts.push(`/ ${job.total}`);
-  if (job.current_speed) parts.push(job.current_speed);
-  return parts.join(' · ');
+  const done = job.downloaded + job.skipped;
+  let txt = `${done}/${job.total} Tracks downloaded`;
+  if (job.failed) txt += ` | ${job.failed} Failed`;
+  return txt;
 }
 
 async function cancelJob(jobId) {
