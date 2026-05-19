@@ -471,10 +471,44 @@ def main():
         except Exception as e:
             errors.append(f"spotdl.ytmusic: {e}")
         try:
+            from spotdl.providers.audio.soundcloud import SoundCloud
+            from spotdl.providers.audio.bandcamp import BandCamp
+            from spotdl.providers.audio.youtube import YouTube
+            logging.info("selftest: spotdl other audio providers OK")
+        except Exception as e:
+            errors.append(f"spotdl audio providers: {e}")
+        try:
+            from spotdl.providers.lyrics.genius import Genius
+            from spotdl.providers.lyrics.azlyrics import AzLyrics
+            from spotdl.providers.lyrics.musixmatch import MusixMatch
+            from spotdl.providers.lyrics.synced import Synced
+            logging.info("selftest: spotdl lyrics providers OK")
+        except Exception as e:
+            errors.append(f"spotdl lyrics providers: {e}")
+        try:
+            from spotdl.types.song import Song
+            from spotdl.utils.search import parse_query
+            logging.info("selftest: spotdl.types/search OK")
+        except Exception as e:
+            errors.append(f"spotdl.types/search: {e}")
+        try:
             import spotipy, mutagen, aiohttp, ytmusicapi
             logging.info("selftest: spotipy/mutagen/aiohttp/ytmusicapi OK")
         except Exception as e:
             errors.append(f"spotipy/mutagen/aiohttp/ytmusicapi: {e}")
+        try:
+            import pykakasi
+            kks = pykakasi.kakasi()
+            _ = kks.convert("テスト")
+            logging.info("selftest: pykakasi conversion OK")
+        except Exception as e:
+            errors.append(f"pykakasi: {e}")
+        try:
+            from platforms.spotify import build_spotify_client
+            from platforms import detect_platform, detect_kind
+            logging.info("selftest: platforms.* OK")
+        except Exception as e:
+            errors.append(f"platforms.*: {e}")
         try:
             from platforms.common import get_bundled_ffmpeg
             ff = get_bundled_ffmpeg()
