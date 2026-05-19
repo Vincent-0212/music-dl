@@ -415,7 +415,8 @@ async def process_track(url: str, events: DownloadEvents, config: dict, sp=None)
 
     output_dir = config.get("output_dir", BASE_DIR)
     singles_dir = output_dir
-    folder_name = os.path.basename(output_dir)
+    os.makedirs(singles_dir, exist_ok=True)
+    folder_name = os.path.basename(singles_dir)
 
     events.playlist_start("spotify", label, 1, folder_name)
 

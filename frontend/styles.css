@@ -75,15 +75,12 @@ html, body {
 .brand-logo {
   display: flex;
   align-items: center;
-  gap: 14px;
 }
 
-.logo-vinyl {
-  width: 38px;
-  height: 38px;
-  color: var(--accent);
-  flex-shrink: 0;
-  opacity: 0.92;
+.logo-img {
+  height: 52px;
+  width: auto;
+  display: block;
 }
 
 .brand-title {

@@ -276,7 +276,13 @@ class Api:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(process_url(url, events, cfg, spotify_client=sp))
+            result = loop.run_until_complete(process_url(url, events, cfg, spotify_client=sp))
+            # If process_url returned None (e.g. yt-dlp couldn't extract info),
+            # the job must still be marked done so the GUI doesn't hang.
+            if result is None and not state.get("done"):
+                state["status"] = "error"
+                state["error_message"] = state.get("error_message") or "Aucune information récupérée (URL invalide ou inaccessible)."
+                state["done"] = True
         except CancelledError:
             state["cancelled"] = True
             state["status"] = "cancelled"

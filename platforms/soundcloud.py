@@ -52,7 +52,8 @@ async def process(url: str, events: DownloadEvents, config: dict, kind: str = "p
         track = _entry_to_track(entries[0])
         label = f"{track['artists']} - {track['title']}"
         folder_path = output_dir
-        folder_name = os.path.basename(output_dir)
+        os.makedirs(folder_path, exist_ok=True)
+        folder_name = os.path.basename(folder_path)
         events.playlist_start("soundcloud", label, 1, folder_name)
 
         filename = sanitize_filename(label)

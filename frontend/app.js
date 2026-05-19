@@ -261,7 +261,7 @@ async function startDownloads() {
       updateActionBar();
       return;
     }
-    await api().update_settings({ output_dir: folder }).catch(() => {});
+    await api().update_settings(null, folder).catch(() => {});
     state.config = await api().get_config().catch(() => state.config);
   }
 
