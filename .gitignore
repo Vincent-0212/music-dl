@@ -8,12 +8,30 @@ config.json
 # Downloaded music (local content, not part of the project)
 # ============================================================
 SINGLES/
-# Playlist folders are any folder that isn't a known source folder.
-# The safest rule: ignore everything that isn't explicitly tracked.
-# Add playlist folders here as needed, or rely on the wildcard below.
-# Example auto-generated playlist folders:
-# My Playlist/
-# VARIATION/
+# All downloaded playlist folders (auto-generated at runtime)
+APREM/
+BBL/
+BLOOM (MIX)/
+BOOM/
+GLITCH/
+KINETIC/
+LIKE/
+MAP/
+ROUGE/
+STUN/
+VARIATION/
+NERVOUS RECORDS/
+PACIFIC DREAMS/
+Ma playlist n° 185/
+Ma playlist n° 188/
+(♥_♥)/
+14_Mix - Ninajirachi - Fuck My Computer (Official Video)/
+2̴̢22̷͍͛̓̄͘._RADIO/
+*.mp3
+*.flac
+*.wav
+*.m4a
+*.ogg
 
 # ============================================================
 # Python
@@ -39,6 +57,11 @@ build/
 *.log
 failed_tracks.json
 playlist_meta.json
+
+# ============================================================
+# Claude Code session data
+# ============================================================
+.claude/
 
 # ============================================================
 # OS
