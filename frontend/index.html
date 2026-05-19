@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -21,7 +21,7 @@
         <p class="brand-sub">Bulk playlist, album &amp; track downloader</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="icon-btn" id="theme-toggle" aria-label="Mode sombre" title="Mode sombre">
+        <button class="icon-btn" id="theme-toggle" aria-label="Dark mode" title="Dark mode">
           <!-- Moon (shown in light mode) -->
           <svg id="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 12.79A9 9 0 1111.21 3a7 7 0 109.79 9.79z"/>
@@ -137,7 +137,7 @@
             <li class="setup-step">
               <span class="step-num">1</span>
               <div class="step-body">
-                <div class="step-text">Crée une app sur le dashboard Spotify</div>
+                <div class="step-text">Create an app on the Spotify developer dashboard</div>
                 <button type="button" class="step-link-btn" id="open-spotify-dev">
                   <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M15 12H9m3-3-3 3 3 3"/></svg>
                   developer.spotify.com/dashboard
@@ -148,17 +148,17 @@
             <li class="setup-step">
               <span class="step-num">2</span>
               <div class="step-body">
-                <div class="step-text">Dans les <strong>Settings</strong> de l'app, ajoute cette <strong>Redirect URI</strong> :</div>
+                <div class="step-text">In your app <strong>Settings</strong>, add this <strong>Redirect URI</strong>:</div>
                 <button type="button" class="copy-btn" id="copy-redirect-uri" data-copy="http://127.0.0.1:8888/callback">
                   <span class="mono">http://127.0.0.1:8888/callback</span>
                   <span class="copy-action">
                     <span class="copy-label">
                       <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                      Copier
+                      Copy
                     </span>
                     <span class="copy-done">
                       <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
-                      Copié !
+                      Copied!
                     </span>
                   </span>
                 </button>
@@ -167,7 +167,7 @@
             <li class="setup-step">
               <span class="step-num">3</span>
               <div class="step-body">
-                <div class="step-text">Copie le <strong>Client ID</strong> et le <strong>Client Secret</strong> depuis les settings de l'app, puis colle-les ci-dessous.</div>
+                <div class="step-text">Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> from your app settings and paste them below.</div>
               </div>
             </li>
           </ol>

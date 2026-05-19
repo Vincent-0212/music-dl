@@ -5,12 +5,15 @@ Native window hosting HTML/CSS/JS frontend with a Python API bridge.
 """
 
 import os
+import re
 import sys
 import asyncio
 import threading
 import time
 import uuid
 from typing import Dict, List
+
+_ANSI_RE = re.compile(r'\x1b\[[0-9;]*[A-Za-z]|\[[0-9;]*[A-Za-z]')
 
 import webview
 
@@ -278,7 +281,7 @@ class Api:
         def on_track_progress(idx, pct, speed):
             state["current_idx"] = idx
             state["current_pct"] = pct
-            state["current_speed"] = speed
+            state["current_speed"] = _ANSI_RE.sub('', speed).strip()
             # Throttle: print only at 25 / 50 / 75 / 100 %
             for milestone in (25, 50, 75, 100):
                 prev = getattr(on_track_progress, "_last_pct", 0)

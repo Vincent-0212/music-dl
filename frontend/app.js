@@ -17,6 +17,38 @@ const notifiedJobs = new Set();
 
 let rowSeq = 0;
 
+const STRINGS = {
+  status: {
+    queued: 'Queued', running: 'Starting', resolving: 'Resolving',
+    downloading: 'Downloading', done: 'Done', error: 'Error',
+    cancelled: 'Cancelled', cancelling: 'Cancelling…',
+  },
+  worker: {
+    resolve_tag: 'Resolving',
+    download_tag: '↓ Downloading',
+    all_resolved: 'All tracks resolved',
+  },
+  card: {
+    cancel: 'Cancel', dismiss: 'Close',
+    open_folder: 'Open folder',
+    retry: (n) => `↺ Retry (${n})`,
+    loading: 'Loading…', track: 'Track',
+  },
+  info: {
+    time_remaining: 'Time remaining',
+    speed: 'Speed',
+    calculating: 'Calculating…',
+  },
+  counters: {
+    downloaded: (n) => `${n} downloaded`,
+    skipped: (n) => `${n} skipped`,
+    failed: (n) => `${n} failed`,
+  },
+  notification: {
+    body: (name, n) => `${name} — ${n} track${n !== 1 ? 's' : ''} downloaded`,
+  },
+};
+
 // ---------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------
@@ -372,12 +404,6 @@ async function pollProgress() {
   }
 }
 
-const STATUS_LABELS = {
-  queued: 'En file', running: 'Démarrage', resolving: 'Résolution',
-  downloading: 'Téléchargement', done: 'Terminé', error: 'Erreur',
-  cancelled: 'Annulé', cancelling: 'Annulation…',
-};
-
 function renderProgress(jobs) {
   const list = $('#progress-list');
 
@@ -393,7 +419,7 @@ function renderProgress(jobs) {
       notifiedJobs.add(job.job_id);
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('MUSIC DL', {
-          body: `${job.playlist_name || 'Téléchargement'} — ${job.downloaded} titre(s)`,
+          body: STRINGS.notification.body(job.playlist_name || 'Download', job.downloaded),
           icon: 'logo.png',
         });
       }
@@ -412,12 +438,12 @@ function renderProgress(jobs) {
           </div>
           <div class="progress-head-actions">
             <div class="progress-status"></div>
-            <button class="progress-card-btn cancel-btn danger" title="Annuler" type="button">
+            <button class="progress-card-btn cancel-btn danger" title="${STRINGS.card.cancel}" type="button">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8">
                 <rect x="6" y="6" width="12" height="12" rx="1"/>
               </svg>
             </button>
-            <button class="progress-card-btn dismiss-btn" title="Fermer" type="button" hidden>
+            <button class="progress-card-btn dismiss-btn" title="${STRINGS.card.dismiss}" type="button" hidden>
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8">
                 <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
@@ -426,7 +452,10 @@ function renderProgress(jobs) {
         </div>
         <div class="worker-row resolve-worker" hidden>
           <div class="worker-label-row">
-            <span class="worker-tag">↗ Résolution</span>
+            <span class="worker-tag">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0"><circle cx="10" cy="10" r="6"/><path d="M20 20l-4.35-4.35"/></svg>
+              ${STRINGS.worker.resolve_tag}
+            </span>
             <span class="worker-track-label"></span>
             <span class="worker-count"></span>
           </div>
@@ -434,21 +463,28 @@ function renderProgress(jobs) {
         </div>
         <div class="worker-row download-worker">
           <div class="worker-label-row">
-            <span class="worker-tag">↓ Téléch.</span>
+            <span class="worker-tag">${STRINGS.worker.download_tag}</span>
             <span class="worker-track-label"></span>
             <span class="worker-count"></span>
           </div>
           <div class="worker-bar"><div class="worker-bar-fill download-fill"></div></div>
-          <div class="worker-meta">
-            <span class="worker-speed"></span>
-            <span class="worker-eta"></span>
+          <div class="worker-info" hidden>
+            <div class="info-item">
+              <span class="info-label">${STRINGS.info.time_remaining}</span>
+              <span class="info-value eta-value">—</span>
+            </div>
+            <div class="info-item info-sep">·</div>
+            <div class="info-item">
+              <span class="info-label">${STRINGS.info.speed}</span>
+              <span class="info-value speed-value">—</span>
+            </div>
           </div>
         </div>
         <div class="progress-footer">
           <div class="progress-counters"></div>
           <div class="progress-footer-actions">
-            <button class="ghost-btn small open-folder-btn" type="button" hidden>Ouvrir le dossier</button>
-            <button class="ghost-btn small warn retry-btn" type="button" hidden>↺ Relancer</button>
+            <button class="ghost-btn small open-folder-btn" type="button" hidden>${STRINGS.card.open_folder}</button>
+            <button class="ghost-btn small warn retry-btn" type="button" hidden></button>
           </div>
         </div>
       `;
@@ -474,58 +510,63 @@ function renderProgress(jobs) {
     card.classList.toggle('cancelled', job.status === 'cancelled' || job.status === 'cancelling');
 
     // Header
-    const title = job.playlist_name || (job.kind === 'track' ? 'Piste' : 'Chargement...');
+    const title = job.playlist_name || (job.kind === 'track' ? STRINGS.card.track : STRINGS.card.loading);
     card.querySelector('.progress-title').textContent = title;
-    const subParts = [job.platform_label, job.kind === 'track' ? 'Single' : 'Playlist'];
-    if (job.folder_name) subParts.push(job.folder_name + '/');
-    card.querySelector('.progress-subtitle').textContent = subParts.join(' · ');
+    const kindLabel = { track: 'Track', album: 'Album', playlist: 'Playlist' }[job.kind] || 'Playlist';
+    card.querySelector('.progress-subtitle').textContent = [job.platform_label, kindLabel].join(' · ');
 
     const statusEl = card.querySelector('.progress-status');
-    statusEl.textContent = STATUS_LABELS[job.status] || job.status;
+    statusEl.textContent = STRINGS.status[job.status] || job.status;
     statusEl.className = 'progress-status ' + (job.status || '');
 
-    // ── Resolve worker (Spotify only, while resolving) ──────
+    // ── Resolve worker (Spotify only) ──────────────────────
     const resolveWorker = card.querySelector('.resolve-worker');
-    const showResolve = job.platform === 'spotify' &&
-      ['resolving', 'downloading'].includes(job.status) &&
-      job.total > 0 && job.resolved < job.total;
+    const showResolve = job.platform === 'spotify' && job.total > 0 &&
+      ['resolving', 'downloading', 'done'].includes(job.status);
     resolveWorker.hidden = !showResolve;
     if (showResolve) {
+      const allResolved = job.resolved >= job.total;
       resolveWorker.querySelector('.worker-track-label').textContent =
-        job.resolve_current_label || '';
+        allResolved ? STRINGS.worker.all_resolved : (job.resolve_current_label || '');
       resolveWorker.querySelector('.worker-count').textContent =
         `${job.resolved} / ${job.total}`;
       resolveWorker.querySelector('.resolve-fill').style.width =
         (job.resolved / job.total * 100).toFixed(1) + '%';
+      resolveWorker.querySelector('.resolve-fill').classList.toggle('resolve-done', allResolved);
     }
 
     // ── Download worker ─────────────────────────────────────
     const done = job.downloaded + job.failed + job.skipped;
-    const perTrack = job.total > 0 ? 100 / job.total : 0;
-    const dlPct = Math.min(done * perTrack + (job.current_pct / 100) * perTrack, 100);
+    const dlPct = job.total > 0 ? Math.min(done / job.total * 100, 100) : 0;
     const dlWorker = card.querySelector('.download-worker');
     dlWorker.querySelector('.worker-track-label').textContent = job.current_label || '';
     dlWorker.querySelector('.worker-count').textContent =
       job.total ? `${done} / ${job.total}` : '';
     dlWorker.querySelector('.download-fill').style.width =
       (job.status === 'done' ? 100 : dlPct).toFixed(1) + '%';
-    dlWorker.querySelector('.worker-speed').textContent = job.current_speed || '';
 
-    // ETA (client-side, based on elapsed time since first track start)
+    // ETA + Speed (client-side)
     const jobCache = state.jobs[job.job_id] || (state.jobs[job.job_id] = {});
     if (job.status === 'downloading' && !jobCache.startedAt) {
       jobCache.startedAt = Date.now() / 1000;
     }
-    let etaText = '';
+    const etaEl = dlWorker.querySelector('.eta-value');
+    const speedEl = dlWorker.querySelector('.speed-value');
+    speedEl.textContent = formatSpeed(job.current_speed);
+    let etaDisplay = '—';
     if (jobCache.startedAt && done > 0 && !job.done) {
       const elapsed = Date.now() / 1000 - jobCache.startedAt;
-      if (elapsed > 2) {
+      if (elapsed > 3) {
         const rate = done / elapsed;
         const remaining = job.total - done;
-        if (rate > 0.001 && remaining > 0) etaText = formatEta(remaining / rate);
+        if (rate > 0.001 && remaining > 0) etaDisplay = formatEta(remaining / rate);
+        else etaDisplay = STRINGS.info.calculating;
+      } else {
+        etaDisplay = STRINGS.info.calculating;
       }
     }
-    dlWorker.querySelector('.worker-eta').textContent = etaText;
+    etaEl.textContent = etaDisplay;
+    dlWorker.querySelector('.worker-info').hidden = !job.current_speed && !jobCache.startedAt;
 
     // ── Footer ──────────────────────────────────────────────
     card.querySelector('.progress-counters').textContent = formatCounters(job);
@@ -539,7 +580,7 @@ function renderProgress(jobs) {
     dismissBtn.hidden   = !job.done;
     openFolderBtn.hidden = !job.done || !job.folder_path;
     retryBtn.hidden     = !job.done || !job.failed;
-    if (job.failed) retryBtn.textContent = `↺ Relancer (${job.failed})`;
+    if (job.failed) retryBtn.textContent = STRINGS.card.retry(job.failed);
   }
 }
 
@@ -550,12 +591,21 @@ function formatEta(sec) {
   return s > 0 ? `~${m} min ${s}s` : `~${m} min`;
 }
 
+function formatSpeed(raw) {
+  if (!raw) return '—';
+  return raw
+    .replace(/KiB\/s/g, ' KB/s')
+    .replace(/MiB\/s/g, ' MB/s')
+    .replace(/GiB\/s/g, ' GB/s')
+    .trim() || '—';
+}
+
 function formatCounters(job) {
   if (!job.total) return '';
   const parts = [];
-  if (job.downloaded) parts.push(`${job.downloaded} téléchargé${job.downloaded > 1 ? 's' : ''}`);
-  if (job.skipped)    parts.push(`${job.skipped} ignoré${job.skipped > 1 ? 's' : ''}`);
-  if (job.failed)     parts.push(`${job.failed} échoué${job.failed > 1 ? 's' : ''}`);
+  if (job.downloaded) parts.push(STRINGS.counters.downloaded(job.downloaded));
+  if (job.skipped)    parts.push(STRINGS.counters.skipped(job.skipped));
+  if (job.failed)     parts.push(STRINGS.counters.failed(job.failed));
   if (!parts.length)  parts.push(`0 / ${job.total}`);
   else parts.push(`/ ${job.total}`);
   return parts.join(' · ');
