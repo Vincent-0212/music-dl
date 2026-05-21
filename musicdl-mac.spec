@@ -74,6 +74,8 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+_icns = 'frontend/icon.icns' if os.path.exists('frontend/icon.icns') else None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -86,17 +88,17 @@ exe = EXE(
     strip=False,
     upx=False,
     console=False,
-    # icon='frontend/icon.icns',
+    icon=_icns,
 )
 
 app = BUNDLE(
     exe,
     name='MusicDL.app',
-    icon=None,
+    icon=_icns,
     bundle_identifier='com.vincentd.musicdl',
     info_plist={
         'NSHighResolutionCapable': True,
         'NSMicrophoneUsageDescription': 'Not used.',
-        'CFBundleShortVersionString': '1.0.1',
+        'CFBundleShortVersionString': '2.0.0',
     },
 )

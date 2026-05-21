@@ -23,7 +23,7 @@ const STRINGS = {
     cancelled: 'Cancelled', cancelling: 'Cancelling…',
   },
   worker: {
-    resolve_tag: 'Resolving',
+    resolve_tag: 'Searching for music',
     download_tag: '↓ Downloading',
     all_resolved: 'All tracks resolved',
   },
@@ -90,22 +90,27 @@ function applySpotifyState() {
 // ---------------------------------------------------------
 
 function applyTheme() {
-  const saved = localStorage.getItem('music-dl-theme') || '';
-  document.documentElement.dataset.theme = saved;
-  updateThemeIcon(saved === 'dark');
+  // Dark is the default — only switch to light when explicitly stored.
+  const saved = localStorage.getItem('music-dl-theme');
+  const theme = saved === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = theme;
+  updateThemeIcon(theme === 'dark');
 }
 
 function toggleTheme() {
-  const isDark = document.documentElement.dataset.theme === 'dark';
-  const next = isDark ? '' : 'dark';
+  const isDark = document.documentElement.dataset.theme !== 'light';
+  const next = isDark ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
   localStorage.setItem('music-dl-theme', next);
-  updateThemeIcon(!isDark);
+  updateThemeIcon(next === 'dark');
 }
 
 function updateThemeIcon(dark) {
   $('#icon-moon').hidden = dark;
   $('#icon-sun').hidden = !dark;
+  // Swap the brand logo to match the current theme
+  const logo = document.querySelector('.logo-img');
+  if (logo) logo.src = dark ? 'logo_dark.png' : 'logo_light.png';
 }
 
 function bindEvents() {
@@ -164,7 +169,7 @@ function addRow() {
   row.innerHTML = `
     <div class="playlist-input-wrap">
       <input type="text" class="playlist-input"
-             placeholder="Paste a Spotify, SoundCloud or YouTube playlist or track URL"
+             placeholder="Paste a Spotify, SoundCloud, YouTube or YouTube Music URL"
              autocomplete="off" spellcheck="false" />
       <span class="platform-chip" hidden></span>
     </div>
@@ -196,7 +201,7 @@ function addRow() {
 }
 
 const TYPE_LABELS = { playlist: 'PLAYLIST', album: 'ALBUM', track: 'TRACK' };
-function shortLabel(p) { return { spotify: 'SP', soundcloud: 'SC', youtube: 'YT' }[p] || '?'; }
+function shortLabel(p) { return { spotify: 'SP', soundcloud: 'SC', youtube: 'YT', ytmusic: 'YM' }[p] || '?'; }
 
 async function handleRowInput(entry, input, wrap, chip) {
   const url = input.value.trim();
@@ -410,7 +415,7 @@ function renderProgress(jobs) {
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('MUSIC DL', {
           body: STRINGS.notification.body(job.playlist_name || 'Download', job.downloaded),
-          icon: 'logo.png',
+          icon: 'icon_dark.png',
         });
       }
     }
@@ -442,9 +447,9 @@ function renderProgress(jobs) {
         </div>
         <div class="worker-row resolve-worker" hidden>
           <div class="worker-label-row">
-            <span class="worker-tag">
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0"><circle cx="10" cy="10" r="6"/><path d="M20 20l-4.35-4.35"/></svg>
-              ${STRINGS.worker.resolve_tag}
+            <span class="worker-tag searching">
+              <svg class="search-loader" viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" style="flex-shrink:0"><circle cx="10" cy="10" r="6"/><path d="M20 20l-4.35-4.35"/></svg>
+              <span class="resolve-tag-text">${STRINGS.worker.resolve_tag}</span>
             </span>
             <span class="worker-track-label"></span>
             <span class="worker-count"></span>
@@ -507,12 +512,17 @@ function renderProgress(jobs) {
     if (showResolve) {
       const allResolved = job.resolved >= job.total;
       resolveWorker.querySelector('.worker-track-label').textContent =
-        allResolved ? STRINGS.worker.all_resolved : (job.resolve_current_label || '');
+        allResolved ? '' : (job.resolve_current_label || '');
       resolveWorker.querySelector('.worker-count').textContent =
         `${job.resolved} / ${job.total}`;
       resolveWorker.querySelector('.resolve-fill').style.width =
         (job.resolved / job.total * 100).toFixed(1) + '%';
       resolveWorker.querySelector('.resolve-fill').classList.toggle('resolve-done', allResolved);
+      // Toggle spinning loader + tag text: "Searching for music" → "All tracks resolved"
+      const tag = resolveWorker.querySelector('.worker-tag');
+      tag.classList.toggle('searching', !allResolved);
+      const tagText = resolveWorker.querySelector('.resolve-tag-text');
+      if (tagText) tagText.textContent = allResolved ? STRINGS.worker.all_resolved : STRINGS.worker.resolve_tag;
     }
 
     // ── Download worker ─────────────────────────────────────

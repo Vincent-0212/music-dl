@@ -67,7 +67,6 @@ jobs:
   # ─── macOS build ──────────────────────────────────────────────────────────
   build-macos:
     runs-on: macos-latest
-    continue-on-error: true
     steps:
       - name: Checkout (with submodules)
         uses: actions/checkout@v4
@@ -82,17 +81,53 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt -r SpotdlRip/requirements.txt pyinstaller
+          pip install -U "yt-dlp" --pre
 
-      - name: Download FFmpeg (macOS)
+      - name: Install FFmpeg
         run: |
           brew install ffmpeg
           cp "$(which ffmpeg)" ffmpeg
+          file ffmpeg
+          ls -lh ffmpeg
+
+      - name: Generate .icns from icon_dark.png
+        run: |
+          set -euo pipefail
+          mkdir -p icon.iconset
+          sips -z 16   16   frontend/icon_dark.png --out icon.iconset/icon_16x16.png
+          sips -z 32   32   frontend/icon_dark.png --out icon.iconset/icon_16x16@2x.png
+          sips -z 32   32   frontend/icon_dark.png --out icon.iconset/icon_32x32.png
+          sips -z 64   64   frontend/icon_dark.png --out icon.iconset/icon_32x32@2x.png
+          sips -z 128  128  frontend/icon_dark.png --out icon.iconset/icon_128x128.png
+          sips -z 256  256  frontend/icon_dark.png --out icon.iconset/icon_128x128@2x.png
+          sips -z 256  256  frontend/icon_dark.png --out icon.iconset/icon_256x256.png
+          sips -z 512  512  frontend/icon_dark.png --out icon.iconset/icon_256x256@2x.png
+          sips -z 512  512  frontend/icon_dark.png --out icon.iconset/icon_512x512.png
+          cp frontend/icon_dark.png icon.iconset/icon_512x512@2x.png
+          iconutil -c icns icon.iconset -o frontend/icon.icns
+          ls -lh frontend/icon.icns
 
       - name: Build .app
         run: pyinstaller musicdl-mac.spec --clean
 
+      - name: Smoke test .app
+        run: |
+          set -e
+          ./dist/MusicDL.app/Contents/MacOS/MusicDL --selftest
+          rc=$?
+          logFile="$HOME/Library/Application Support/MusicDL/music-dl.log"
+          if [ -f "$logFile" ]; then
+            echo "=== Last 50 lines of log ==="
+            tail -n 50 "$logFile"
+          fi
+          if [ $rc -ne 0 ]; then
+            echo "Smoke test failed (exit code $rc)"
+            exit $rc
+          fi
+          echo "Smoke test PASSED"
+
       - name: Zip .app bundle
-        run: cd dist && zip -r "MusicDL macOS.zip" "MusicDL.app"
+        run: cd dist && zip -r -y "MusicDL macOS.zip" "MusicDL.app"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -102,7 +137,7 @@ jobs:
 
   # ─── Create GitHub Release ────────────────────────────────────────────────
   release:
-    needs: [build-windows]
+    needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -117,3 +152,4 @@ jobs:
           generate_release_notes: true
           files: |
             windows/MusicDL.exe
+            macos/MusicDL macOS.zip

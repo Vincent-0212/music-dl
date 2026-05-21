@@ -1,6 +1,13 @@
 """Platform dispatcher for MUSIC DL."""
 
+import re
+
 from .common import DownloadEvents, PlaylistResult, load_config, save_config
+
+
+# YouTube Mix / Radio prefixes: RD = Radio/Mix, UL = Uploads, PU = Personal Uploads,
+# OL = Other List, LL = Liked, MM = Music Mix. All should be treated as playlists.
+_YT_MIX_RE = re.compile(r'[?&]list=(?:RD|UL|PU|OL|LL|MM)', re.IGNORECASE)
 
 
 def detect_platform(url: str):
@@ -12,7 +19,9 @@ def detect_platform(url: str):
         return "spotify"
     if "soundcloud.com" in u:
         return "soundcloud"
-    if "youtube.com" in u or "youtu.be" in u or "music.youtube.com" in u:
+    if "music.youtube.com" in u:
+        return "ytmusic"
+    if "youtube.com" in u or "youtu.be" in u:
         return "youtube"
     return None
 
@@ -30,13 +39,18 @@ def detect_kind(url: str):
             return "track"
         if "/album/" in u or u.startswith("spotify:album:"):
             return "album"
+    # YouTube Mix / Radio (list=RD*, UL*, etc.) — even with watch?v= prefix
+    if _YT_MIX_RE.search(u):
+        return "playlist"
     # YouTube
     if "youtube.com/playlist" in u or ("list=" in u and "watch?" not in u):
         return "playlist"
-    if "youtu.be/" in u or "watch?v=" in u or "music.youtube.com/watch" in u:
-        return "track"
+    if "music.youtube.com/playlist" in u:
+        return "playlist"
     if "music.youtube.com/browse/" in u:
         return "album"
+    if "youtu.be/" in u or "watch?v=" in u or "music.youtube.com/watch" in u:
+        return "track"
     if "youtube.com" in u and "list=" in u:
         return "playlist"
     # SoundCloud: /sets/ is a playlist, otherwise probably a track
@@ -51,6 +65,7 @@ PLATFORM_LABELS = {
     "spotify": "Spotify",
     "soundcloud": "SoundCloud",
     "youtube": "YouTube",
+    "ytmusic": "YouTube Music",
 }
 
 
@@ -69,7 +84,9 @@ async def process_url(url: str, events: DownloadEvents, config: dict, spotify_cl
     if platform == "soundcloud":
         from . import soundcloud
         return await soundcloud.process(url, events, config, kind=kind)
-    if platform == "youtube":
+    if platform in ("youtube", "ytmusic"):
+        # YouTube Music URLs route to the same yt-dlp pipeline as YouTube —
+        # extractor handles both domains identically.
         from . import youtube
         return await youtube.process(url, events, config, kind=kind)
     events.log(f"Platform not recognized: {url}", level="error")
