@@ -7,26 +7,6 @@ config.json
 # ============================================================
 # Downloaded music (local content, not part of the project)
 # ============================================================
-SINGLES/
-# All downloaded playlist folders (auto-generated at runtime)
-APREM/
-BBL/
-BLOOM (MIX)/
-BOOM/
-GLITCH/
-KINETIC/
-LIKE/
-MAP/
-ROUGE/
-STUN/
-VARIATION/
-NERVOUS RECORDS/
-PACIFIC DREAMS/
-Ma playlist n° 185/
-Ma playlist n° 188/
-(♥_♥)/
-14_Mix - Ninajirachi - Fuck My Computer (Official Video)/
-2̴̢22̷͍͛̓̄͘._RADIO/
 *.mp3
 *.flac
 *.wav
@@ -62,6 +42,13 @@ playlist_meta.json
 # Claude Code session data
 # ============================================================
 .claude/
+.claude-flow/
+.mcp.json
+
+# ============================================================
+# Graphify (knowledge graph — generated locally)
+# ============================================================
+graphify-out/
 
 # ============================================================
 # OS

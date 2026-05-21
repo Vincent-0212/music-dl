@@ -70,20 +70,25 @@ def _download_with_fallback(track: dict, source_url: str, folder_path: str,
             events.log(f"SoundCloud download failed ({e}) — trying YouTube fallback.", level="warn")
             pre_detected_preview = True  # force fallback path below
 
-        # Post-download duration sanity check — preview is typically ~30s
-        if not pre_detected_preview and expected_seconds > 60:
+        # Post-download duration check — les previews Go+ font exactement 30s.
+        # On ne gate plus sur expected_seconds > 60 car yt-dlp peut retourner
+        # la durée du preview (30s) au lieu de la durée complète de la piste.
+        if not pre_detected_preview:
             actual = mp3_duration_seconds(mp3_path) or 0
-            if actual and actual < 0.8 * expected_seconds:
-                events.log(
-                    f"Downloaded duration {actual:.0f}s << expected {expected_seconds:.0f}s — "
-                    f"likely GO+ preview. Trying YouTube fallback.",
-                    level="warn",
-                )
-                pre_detected_preview = True
-                try:
-                    os.remove(mp3_path)
-                except Exception:
-                    pass
+            if actual > 0:
+                too_short = actual <= 35  # seuil absolu : preview SoundCloud = 30s
+                mismatch = expected_seconds > 60 and actual < 0.8 * expected_seconds
+                if too_short or mismatch:
+                    events.log(
+                        f"Duree telechargee {actual:.0f}s (attendu {expected_seconds:.0f}s) — "
+                        f"extrait GO+ detecte. Fallback YouTube.",
+                        level="warn",
+                    )
+                    pre_detected_preview = True
+                    try:
+                        os.remove(mp3_path)
+                    except Exception:
+                        pass
 
     if not pre_detected_preview:
         return  # SoundCloud version is fine
@@ -99,10 +104,9 @@ def _download_with_fallback(track: dict, source_url: str, folder_path: str,
         yt_url = search_youtube_for_track(title, artist)
 
     if not yt_url:
-        # Last resort: redo SoundCloud download (so user at least gets the preview).
-        events.log("No YouTube alternative found — keeping SoundCloud preview.", level="warn")
-        download_audio(source_url, folder_path, filename, idx, total, events, quality=quality)
-        return
+        raise RuntimeError(
+            f"Piste GO+ SoundCloud ({title!r}) : aucune alternative YouTube trouvee."
+        )
 
     events.log(f"YouTube fallback: {yt_url}", level="info")
     download_audio(yt_url, folder_path, filename, idx, total, events, quality=quality)
