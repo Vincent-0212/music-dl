@@ -256,6 +256,94 @@ NUM_DOWNLOAD_WORKERS = 2
 QUEUE_BUFFER = 8
 
 
+# Alternate yt-dlp player_clients to try when the default ios+android fails.
+_FALLBACK_PLAYER_CLIENTS = [
+    ["web"],
+    ["web_safari"],
+    ["tv"],
+    ["mweb"],
+]
+
+
+def _download_with_retry(yt_url: str, folder_path: str, filename: str,
+                         idx: int, total: int, events: DownloadEvents,
+                         quality: str) -> None:
+    """Download via yt-dlp; on failure, retry with alternate player_clients.
+
+    Spotify-resolved URLs are usually YouTube Music — same retry strategy as
+    the youtube pipeline. Kept as a thin wrapper so the rest of spotify.py
+    stays unchanged.
+    """
+    import yt_dlp as _ytdlp
+    import re as _re
+    from .common import get_bundled_ffmpeg
+
+    ffmpeg_loc = None
+    try:
+        ff = get_bundled_ffmpeg()
+        if ff:
+            ffmpeg_loc = os.path.dirname(ff)
+    except Exception:
+        pass
+
+    def _make_opts(player_client):
+        def progress_hook(d):
+            if events.is_cancelled and events.is_cancelled():
+                raise CancelledError("Cancelled")
+            if d["status"] == "downloading":
+                pct_str = (d.get("_percent_str") or "0%").strip()
+                try:
+                    pct = float(_re.sub(r"[^\d.]", "", pct_str) or "0")
+                except Exception:
+                    pct = 0.0
+                speed = (d.get("_speed_str") or "").strip()
+                events.track_progress(idx, pct, speed)
+            elif d["status"] == "finished":
+                events.track_progress(idx, 100.0, "converting...")
+
+        opts = {
+            "format": "bestaudio[ext=m4a]/bestaudio/best",
+            "outtmpl": os.path.join(folder_path, f"{filename}.%(ext)s"),
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": str(quality),
+            }],
+            "progress_hooks": [progress_hook],
+            "quiet": True,
+            "no_warnings": True,
+            "extractor_args": {"youtube": {"player_client": player_client}},
+        }
+        if ffmpeg_loc:
+            opts["ffmpeg_location"] = ffmpeg_loc
+        return opts
+
+    last_exc = None
+    # 1. Default ios+android (same as common.download_audio)
+    try:
+        download_audio(yt_url, folder_path, filename, idx, total, events, quality=quality)
+        return
+    except CancelledError:
+        raise
+    except Exception as e:
+        last_exc = e
+        events.log(f"Default client failed ({e}) — retrying alt clients.", level="warn")
+
+    # 2. Alt clients in sequence
+    for client in _FALLBACK_PLAYER_CLIENTS:
+        try:
+            with _ytdlp.YoutubeDL(_make_opts(client)) as ydl:
+                ydl.download([yt_url])
+            return
+        except CancelledError:
+            raise
+        except Exception as e:
+            last_exc = e
+            events.log(f"client={client} failed ({e}).", level="warn")
+
+    raise last_exc if last_exc else RuntimeError("All Spotify download fallbacks exhausted")
+
+
 # ------------------------------------------------------------
 # Playlist pipeline
 # ------------------------------------------------------------
@@ -440,7 +528,7 @@ async def process(url: str, events: DownloadEvents, config: dict, sp=None) -> Pl
             try:
                 await loop.run_in_executor(
                     None,
-                    partial(download_audio, track["yt_url"], folder_path, filename,
+                    partial(_download_with_retry, track["yt_url"], folder_path, filename,
                             idx, total_to_process, events, quality),
                 )
                 events.track_done(idx, True)
@@ -548,7 +636,8 @@ async def process_track(url: str, events: DownloadEvents, config: dict, sp=None)
 
     events.track_start(1, 1, label)
     try:
-        download_audio(yt_url, singles_dir, filename, 1, 1, events, quality=config.get("audio_quality", "320"))
+        _download_with_retry(yt_url, singles_dir, filename, 1, 1, events,
+                             quality=config.get("audio_quality", "320"))
         events.track_done(1, True)
         events.playlist_done(folder_name, 1, 1, 0)
         return PlaylistResult("spotify", "track", label, folder_name, singles_dir, 1, 1, 0, 0, [track])
@@ -718,7 +807,7 @@ async def process_album(url: str, events: DownloadEvents, config: dict, sp=None)
             try:
                 await loop.run_in_executor(
                     None,
-                    partial(download_audio, track["yt_url"], folder_path, filename,
+                    partial(_download_with_retry, track["yt_url"], folder_path, filename,
                             idx, total_to_process, events, quality),
                 )
                 events.track_done(idx, True)

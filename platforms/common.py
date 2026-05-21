@@ -382,3 +382,78 @@ def ensure_spotdlrip_on_path():
         sp_dir = os.path.join(BASE_DIR, "SpotdlRip")
     if sp_dir not in sys.path:
         sys.path.insert(0, sp_dir)
+
+
+# ------------------------------------------------------------
+# Resolver fallback chain
+# ------------------------------------------------------------
+
+def resolve_with_fallbacks(track: dict, providers: list, events: Optional[DownloadEvents] = None) -> Optional[str]:
+    """Try each provider in order. Returns first non-empty URL or None.
+
+    Each provider is a callable(track) -> str|None. Exceptions are caught and
+    logged so a single broken provider does not break the chain.
+    """
+    for provider in providers:
+        name = getattr(provider, "__name__", repr(provider))
+        try:
+            url = provider(track)
+            if url:
+                return url
+        except CancelledError:
+            raise
+        except Exception as e:
+            if events is not None:
+                events.log(f"Resolver {name} failed: {e}", level="warn")
+    return None
+
+
+# ------------------------------------------------------------
+# Audio file inspection (for SoundCloud GO+ snippet detection)
+# ------------------------------------------------------------
+
+def mp3_duration_seconds(path: str) -> Optional[float]:
+    """Return mp3 duration in seconds, or None if unreadable."""
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        from mutagen.mp3 import MP3
+        audio = MP3(path)
+        return float(audio.info.length)
+    except Exception:
+        return None
+
+
+def search_ytmusic_for_track(title: str, artist: str) -> Optional[str]:
+    """Find a YouTube Music URL matching title+artist. Returns None on miss.
+
+    Used as a fallback when the primary download fails (SoundCloud GO+,
+    YouTube region-locked, etc.).
+    """
+    if not title:
+        return None
+    try:
+        ensure_spotdlrip_on_path()
+        from spotdl.providers.audio.ytmusic import YouTubeMusic
+        from spotdl.types.song import Song
+
+        artists = [artist] if artist else ["Unknown"]
+        song = Song.from_missing_data(
+            name=title,
+            artists=artists,
+            artist=artists[0],
+            duration=0,
+        )
+        provider = YouTubeMusic()
+        result = provider.search(song, only_verified=False)
+        return result or None
+    except Exception:
+        return None
+
+
+def search_youtube_for_track(title: str, artist: str) -> Optional[str]:
+    """yt-dlp ytsearch1: keyword fallback. Always returns a search URL string."""
+    if not title:
+        return None
+    query = f"{artist} - {title}".strip(" -") if artist else title
+    return f"ytsearch1:{query} audio"

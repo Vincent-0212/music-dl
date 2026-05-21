@@ -166,17 +166,25 @@ class Api:
         return {"ok": False}
 
     def open_folder(self, path: str):
-        if not path or not os.path.isdir(path):
-            return {"ok": False, "error": "Dossier introuvable"}
-        if sys.platform == "win32":
-            os.startfile(path)
-        elif sys.platform == "darwin":
-            import subprocess
-            subprocess.Popen(["open", path])
-        else:
-            import subprocess
-            subprocess.Popen(["xdg-open", path])
-        return {"ok": True}
+        if not path:
+            logging.warning("open_folder: empty path")
+            return {"ok": False, "error": "Empty path"}
+        if not os.path.isdir(path):
+            logging.warning("open_folder: not a directory: %r", path)
+            return {"ok": False, "error": f"Folder not found: {path}"}
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen(["open", path])
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", path])
+            return {"ok": True}
+        except Exception as e:
+            logging.exception("open_folder failed for %r: %s", path, e)
+            return {"ok": False, "error": str(e)}
 
     def get_log_path(self):
         return {"log_path": LOG_PATH, "log_dir": LOG_DIR}
@@ -311,7 +319,13 @@ class Api:
             state["playlist_name"] = name
             state["total"] = total
             state["folder_name"] = folder_name
-            state["folder_path"] = os.path.join(cfg.get("output_dir", BASE_DIR), folder_name)
+            # Tentative folder_path; the authoritative one is set from
+            # result.folder_path at the end of _run_job. This handles single
+            # tracks (folder_name == basename(output_dir)) which would
+            # otherwise duplicate the path segment.
+            base = cfg.get("output_dir", BASE_DIR)
+            candidate = os.path.join(base, folder_name) if folder_name else base
+            state["folder_path"] = candidate if os.path.isdir(candidate) else base
             state["status"] = "resolving" if platform == "spotify" and state["kind"] == "playlist" else "downloading"
             _clog(f'"{name}"  —  {total} tracks  →  {folder_name}/', "PLY")
 
@@ -416,6 +430,11 @@ class Api:
                 state["done"] = True
                 _clog(state["error_message"], "ERR")
                 logging.error("Job %s: %s", job_id, state["error_message"])
+            elif result is not None and getattr(result, "folder_path", None):
+                # Use the authoritative folder path returned by the handler.
+                # Fixes the "Open folder" bug on single-track jobs where the
+                # GUI was recomposing output_dir + basename(output_dir).
+                state["folder_path"] = result.folder_path
         except CancelledError:
             state["cancelled"] = True
             state["status"] = "cancelled"
@@ -537,7 +556,7 @@ def main():
         width=1100,
         height=820,
         min_size=(880, 640),
-        background_color="#faf8f5",
+        background_color="#1a1917",
     )
     webview.start(debug=False)
 
